@@ -1,7 +1,6 @@
-"""Home feed + weekly team feed tests. Run on Linux:   python3 -m unittest -v tests.test_feeds
+"""Home feed + "Share to feed" tests. Run on Linux:   python3 -m unittest -v tests.test_feeds
 Starts the REAL team box (in-process, temp data dir, random port) with the fake team gateway + fake llama, like test_teambox.
-The Tuesday-14:00 clock is simulated by calling the team feed's tick(now=...) with chosen times. Never calls a real model."""
-import datetime as dt
+Never calls a real model. (The weekly Tuesday team feed was removed on 2026-10-21; test_23 proves no trace of it is left.)"""
 import io
 import json
 import os
@@ -26,7 +25,6 @@ from fake_gateway import FakeGateway  # noqa: E402
 from test_teambox import EXACT_BOTTOM, free_port  # noqa: E402
 from teambox import config as C  # noqa: E402
 from teambox import tour  # noqa: E402
-from teambox.modules import team_feed  # noqa: E402
 from teambox.server import make_server  # noqa: E402
 
 A, B, ADMIN = "alice@test.example", "bob@test.example", "marjus@test.example"
@@ -96,7 +94,7 @@ class FeedsTest(unittest.TestCase):
                        "gateway": {"url": "http://127.0.0.1:%d" % cls.gw.port, "secret_file": sf, "timeout_s": 30},
                        "builds": {"max_total": 2, "max_steps": 12, "max_minutes": 5}, "jail": {"memory_mb": 512, "timeout_s": 20},
                        "feeds": {"max_file_mb": MAX_FILE_MB, "member_quota_mb": QUOTA_MB, "max_files_per_post": 4,
-                                 "timezone": "America/Chicago"}}, fh)
+                                 }}, fh)
         os.environ["TEAMBOX_ALLOW_DEV"] = "1"
         cls.cfg = C.load(cls.cfgp)
         cls.app, cls.srv = make_server(cls.cfg)            # NOTE: modules.start (the real-clock scheduler) is not called in tests
@@ -110,7 +108,6 @@ class FeedsTest(unittest.TestCase):
                 break
             except OSError:
                 time.sleep(0.1)
-        cls.tf = cls.app.ext["team-feed"]
 
     @classmethod
     def tearDownClass(cls):
@@ -181,29 +178,28 @@ class FeedsTest(unittest.TestCase):
     def test_01_live_tour_and_claims(self):
         s, j = self.api("GET", "/api/modules", A)
         st = {m["id"]: m["status"] for m in j["modules"]}
-        self.assertEqual((st["feed"], st["team-feed"]), ("live", "live"))
+        self.assertEqual(st, {"feed": "live", "messages": "live"})
         s, t = self.api("GET", "/api/tour", A)
         self.assertEqual(t["bottom_text"], EXACT_BOTTOM, "Marjus's bottom text is unchanged")
         self.assertEqual(tour.BOTTOM_TEXT, EXACT_BOTTOM)
         cps = {c["id"]: c for c in t["checkpoints"]}
-        for cid in ("home", "team-feed"):
+        for cid in ("home", "projects"):
             self.assertNotIn("coming soon", cps[cid]["text"].lower())
             self.assertNotIn(" will ", " " + cps[cid]["text"] + " ", "live areas are described as they are, not as plans")
-            self.assertTrue(cps[cid]["link"].startswith("#/m/"))
-        self.assertIn("Weekly team feed: LIVE", t["prompt"])
+            self.assertTrue(cps[cid]["link"].startswith("#/"))
+        self.assertIn("9. Share to feed: LIVE", t["prompt"])
         self.assertIn("Home feed uploads: LIVE", t["prompt"])
         self.assertIn("%s MB per file and %s MB per member" % (MAX_FILE_MB, QUOTA_MB), t["prompt"], "the prompt quotes the box's real caps")
-        self.assertIn("America/Chicago", t["prompt"])
+        self.assertIn("Share to feed", cps["projects"]["text"])
         s, page = self.api("GET", "/how-it-works")
-        self.assertNotIn("Team feed (every Tuesday 14:00) - not live yet", page)
         self.assertNotIn("Home feed - not live yet", page)
-        for phrase in ("application/octet-stream", "X-Content-Type-Options: nosniff", "read-only copy made at 14:00", "published late"):
+        for phrase in ("application/octet-stream", "X-Content-Type-Options: nosniff", "read-only copy", "Unshare", "id=\"sharing\""):
             self.assertIn(phrase, page)
         s, pub = self.api("GET", "/api/public/tour")
         self.assertEqual(pub["prompt"], t["prompt"])
         js = readf(os.path.join(ROOT, "static", "app.js"))
         self.assertNotIn("coming soon.\" })", js.split("function vHome")[1].split("function tile")[0], "the home slot is no longer 'coming soon'")
-        print("\n  tour: home + team-feed checkpoints live (no 'coming soon'), bottom text exact, prompt claims 9 + 12 LIVE with real caps")
+        print("\n  tour: home + projects checkpoints live (no 'coming soon'), bottom text exact, prompt claims 9 (Share to feed) + 12 LIVE with real caps")
 
     # ============================================================ 1. uploads: types, sizes, quota, serving
     def test_10_upload_types_and_limits(self):
@@ -357,8 +353,8 @@ class FeedsTest(unittest.TestCase):
         print("\n  posts: comments + emoji toggle; only the offered emoji; author edits (B/admin 403); B can not delete A's; "
               "admin deletes any post/comment; files + quota freed")
 
-    # ============================================================ 3. the weekly team feed
-    def test_20_private_until_tuesday(self):
+    # ============================================================ 3. private by default + "Share to feed" (the weekly team feed is gone)
+    def test_20_private_until_shared(self):
         a = self.me(A)["id"]
         self.me(B)
         s, j = self.api("POST", "/api/builds", A, {"sandbox": "my-sandbox", "task": "NORMAL: add an add() function with a test", "model": "builder-bot"})
@@ -367,89 +363,47 @@ class FeedsTest(unittest.TestCase):
         b = self.wait_build(A, bid)
         self.assertEqual(b["verdict"], "tests pass")
         self.assertEqual(self.api("POST", "/api/builds/%s/apply" % bid, A)[0], 200)          # -> a commit on A's main
-        self.assertEqual(self.api("POST", "/api/versions", A, {"model": "chat-llama", "name": "Terse", "settings": {"system_prompt": "Be terse.", "temperature": 0.1}})[0], 200)
-        self.assertEqual(self.api("POST", "/api/sandboxes", A, {"name": "weather-x"})[0], 200)
-        type(self).bid = bid
-        nxt = self.tf.next_slot(time.time())
-        type(self).slot = nxt
-        self.assertIsNone(self.tf.tick(nxt.timestamp() - 60), "one minute before Tuesday 14:00: nothing is published")
-        self.assertEqual(self.api("GET", "/api/m/team-feed/weeks", B)[1]["weeks"], [])
-        self.assertEqual(self.api("GET", "/api/builds/" + bid, B)[0], 404, "B can not see A's build before Tuesday")
-        self.assertEqual(self.api("GET", "/api/sandboxes/%s/weather-x" % a, B)[0], 404)
-        self.assertEqual(self.api("GET", "/api/m/team-feed/item?id=" + team_feed.iid_of("build:" + bid), B)[0], 404,
-                         "the team feed has no copy of unpublished work")
-        pa = self.api("GET", "/api/m/team-feed/pending", A)[1]["pending"]
-        kinds = sorted({x["type"] for x in pa})
-        self.assertEqual(kinds, ["build", "commits", "sandbox", "version"], pa)
-        self.assertEqual([x for x in self.api("GET", "/api/m/team-feed/pending", B)[1]["pending"] if x["owner"] == a], [],
-                         "B's 'goes out next time' list shows only B's own work")
-        self.assertTrue(any(x["owner"] == a for x in self.api("GET", "/api/m/team-feed/pending", ADMIN)[1]["pending"]), "admins see everyone's")
-        print("\n  before Tue 14:00 (%s): tick publishes nothing; B: build 404, sandbox 404, team-feed item 404; A's pending = %s"
-              % (nxt.strftime("%a %Y-%m-%d %H:%M %Z"), kinds))
+        s, v = self.api("POST", "/api/versions", A, {"model": "chat-llama", "name": "Terse", "settings": {"system_prompt": "Be terse.", "temperature": 0.1}})
+        self.assertEqual(s, 200)
+        type(self).bid, type(self).vid = bid, v["version"]["id"]
+        self.assertEqual(self.api("GET", "/api/builds/" + bid, B)[0], 404, "B can not see A's build")
+        self.assertEqual(self.api("GET", "/api/sandboxes/%s/my-sandbox" % a, B)[0], 404)
+        feed = json.dumps(self.api("GET", "/api/m/feed/posts?limit=50", B)[1])
+        self.assertNotIn(bid, feed, "nothing of A's reaches the feed by itself")
+        self.assertEqual(self.api("GET", "/api/m/feed/shares", A)[1]["shares"], {})
+        # nobody can share someone else's work - same answer as "does not exist"
+        self.assertEqual(self.api("POST", "/api/sandboxes", A, {"name": "only-ana-has-this"})[0], 200)
+        for body in ({"kind": "build", "build": bid}, {"kind": "project", "project": "only-ana-has-this"}, {"kind": "version", "model": "chat-llama", "version": type(self).vid}):
+            s, j = self.api("POST", "/api/m/feed/share", B, body)
+            self.assertEqual(s, 404, (body, j))
+            s, j = self.api("POST", "/api/m/feed/share", ADMIN, body)
+            self.assertEqual(s, 404, "not even an admin shares a member's work for them: %s" % j)
+        self.assertEqual(self.api("POST", "/api/m/feed/share", A, {"kind": "nonsense"})[0], 400)
+        print("\n  private by default: B 404 on A's build + project, A's build not in the feed; B/admin can not share A's work (404)")
 
-    def test_21_publish_catches_up_and_is_idempotent(self):
-        if not hasattr(type(self), "slot"):
-            self.test_20_private_until_tuesday()
-        slot = type(self).slot
-        late = slot.timestamp() + 2 * 86400 + 3600              # the box was off at 14:00 and came back on Thursday
-        rec = self.tf.tick(late)
-        self.assertIsNotNone(rec, "the missed Tuesday is published on the next tick (catch-up)")
-        self.assertEqual(rec["key"], slot.strftime("%Y-%m-%d"))
-        self.assertTrue(rec["late"])
-        self.assertEqual(rec["cutoff"], slot.timestamp(), "cut off at Tuesday 14:00, not at the late publish time")
-        self.assertEqual(sorted(rec["counts"]), ["build", "commits", "sandbox", "version"], rec["counts"])
-        n_items = len(os.listdir(os.path.join(self.cfg["data_dir"], "team-feed", "items")))
-        self.assertIsNone(self.tf.tick(late), "running it twice publishes once")
-        self.assertIsNone(self.tf.tick(late + 3600))
-        self.assertIsNone(self.tf.tick(slot.timestamp() + 30))
-        self.assertEqual(len(os.listdir(os.path.join(self.cfg["data_dir"], "team-feed", "items"))), n_items)
-        # two processes/threads racing on the NEXT Tuesday: exactly one publishes (thread lock + file lock + record)
-        tf2 = team_feed.TeamFeed(self.cfg, self.app.store)
-        nxt2 = self.tf.next_slot(late).timestamp() + 60
-        res = []
-        ths = [threading.Thread(target=lambda t=t: res.append(t.tick(nxt2))) for t in (self.tf, tf2, self.tf, tf2)]
-        [t.start() for t in ths]
-        [t.join() for t in ths]
-        self.assertEqual(sum(1 for r in res if r), 1, res)
-        weeks = self.api("GET", "/api/m/team-feed/weeks", B)[1]["weeks"]
-        self.assertEqual([w["key"] for w in weeks][-1], slot.strftime("%Y-%m-%d"))
-        st = json.loads(readf(os.path.join(self.cfg["data_dir"], "team-feed", "publishes.json")))
-        self.assertEqual(len(st["weeks"]), 2, "one record per Tuesday")
-        print("\n  publish: catch-up on Thursday -> week %s (late, cutoff = Tue 14:00, %s); 3 more ticks -> nothing; 4 racing ticks -> 1 publish"
-              % (rec["key"], rec["counts"]))
-
-    def test_22_published_read_only_and_social(self):
-        if not hasattr(type(self), "slot"):
-            self.test_21_publish_catches_up_and_is_idempotent()
-        a = self.me(A)["id"]
-        bid, key = type(self).bid, type(self).slot.strftime("%Y-%m-%d")
-        s, j = self.api("GET", "/api/m/team-feed/items?week=" + key, B)
+    def test_21_share_unshare_build(self):
+        if not hasattr(type(self), "bid"):
+            self.test_20_private_until_shared()
+        a, bid = self.me(A)["id"], type(self).bid
+        s, j = self.api("POST", "/api/m/feed/share", A, {"kind": "build", "build": bid, "text": "my first build"})
         self.assertEqual(s, 200, j)
-        items = {i["type"]: i for i in j["items"]}
-        self.assertEqual(items["build"]["owner"], a)
-        s, it = self.api("GET", "/api/m/team-feed/item?id=" + items["build"]["id"], B)
-        it = it["item"]
-        self.assertTrue(it["read_only"])
-        self.assertIn("+def add(a, b):", it["data"]["diff"], "B sees the diff")
-        self.assertIn("PASS", it["data"]["tests_text"], "and the test results")
-        self.assertEqual(it["data"]["verdict"], "tests pass")
-        s, v = self.api("GET", "/api/m/team-feed/item?id=" + items["version"]["id"], B)
-        self.assertEqual(v["item"]["data"]["settings"], {"system_prompt": "Be terse.", "temperature": 0.1})
-        s, cm = self.api("GET", "/api/m/team-feed/item?id=" + items["commits"]["id"], B)
-        self.assertTrue(cm["item"]["data"]["commits"])
-        self.assertIn("add.py", cm["item"]["data"]["stat"])
-        # comments + reactions by everyone
-        self.assertEqual(self.api("POST", "/api/m/team-feed/comment", B, {"item": it["id"], "text": "great add()"})[0], 200)
-        s, j = self.api("POST", "/api/m/team-feed/react", B, {"item": it["id"], "emoji": THUMBS})
+        pid = j["post"]["id"]
+        self.assertEqual(j["post"]["shared"]["kind"], "build")
+        self.assertEqual(self.api("POST", "/api/m/feed/share", A, {"kind": "build", "build": bid})[0], 409, "shared once")
+        self.assertEqual(self.api("GET", "/api/m/feed/shares", A)[1]["shares"], {"build:" + bid: pid})
+        posts = self.api("GET", "/api/m/feed/posts?limit=50", B)[1]["posts"]
+        mine = next(p for p in posts if p["id"] == pid)
+        self.assertTrue(mine["shared"]["read_only"])
+        self.assertNotIn("diff", mine["shared"], "the list carries a summary; the copy opens on request")
+        s, full = self.api("GET", "/api/m/feed/shared?post=" + pid, B)
+        self.assertEqual(s, 200, full)
+        d = full["post"]["data"]
+        self.assertIn("+def add(a, b):", d["diff"], "B sees the diff of the shared copy")
+        self.assertIn("PASS", d["tests_text"])
+        self.assertEqual(self.api("POST", "/api/m/feed/comment", B, {"post": pid, "text": "great add()"})[0], 200)
+        s, j = self.api("POST", "/api/m/feed/react", B, {"post": pid, "emoji": THUMBS})
         self.assertEqual(next(r for r in j["reactions"] if r["emoji"] == THUMBS)["count"], 1)
-        s, j = self.api("POST", "/api/m/team-feed/comment", A, {"item": it["id"], "text": "thanks!"})
-        ac = j["result"]
-        self.assertEqual(self.api("POST", "/api/m/team-feed/comment/delete", B, {"item": it["id"], "comment": ac})[0], 403)
-        self.assertEqual(self.api("POST", "/api/m/team-feed/react", B, {"item": it["id"], "emoji": "x"})[0], 400)
-        self.assertEqual(self.api("POST", "/api/m/team-feed/comment", B, {"item": "f" * 24, "text": "x"})[0], 404)
-        s, it2 = self.api("GET", "/api/m/team-feed/item?id=" + it["id"], A)
-        self.assertEqual([c["text"] for c in it2["item"]["comments"]], ["great add()", "thanks!"])
-        # still NO access to the real thing
+        # sharing never grants access to the real thing
         self.assertEqual(self.api("GET", "/api/builds/" + bid, B)[0], 404, "the build page itself stays owner + admins")
         self.assertEqual(self.api("POST", "/api/builds/%s/reject" % bid, B)[0], 404)
         self.assertEqual(self.api("GET", "/api/sandboxes/%s/my-sandbox" % a, B)[0], 404)
@@ -458,46 +412,64 @@ class FeedsTest(unittest.TestCase):
                             os.path.join(self.tmp, "bclone")], capture_output=True, text=True, timeout=60,
                            env=dict(os.environ, GIT_TERMINAL_PROMPT="0", HOME=self.tmp))
         self.assertNotEqual(r.returncode, 0)
-        self.assertIn("403", r.stderr, "no git access to A's sandbox after the publish either")
-        # new work after the publish is private again until the next Tuesday
-        self.assertEqual(self.api("POST", "/api/versions", A, {"model": "chat-llama", "name": "Later", "settings": {"temperature": 0.9}})[0], 200)
-        pend = [x for x in self.api("GET", "/api/m/team-feed/pending", A)[1]["pending"] if x["type"] == "version"]
-        self.assertEqual(len(pend), 1, "only the new version waits; the published one is not repeated")
-        print("\n  after publish: B sees A's build diff/tests, settings version, commits (read-only), both comment + react; "
-              "B still 404 on /api/builds, 404 on the sandbox, git clone 403; new work private again")
+        self.assertIn("403", r.stderr, "no git access to A's project after sharing either")
+        self.assertEqual(self.api("POST", "/api/m/feed/unshare", B, {"key": "build:" + bid})[0], 404, "B can not unshare A's post")
+        s, j = self.api("POST", "/api/m/feed/unshare", A, {"key": "build:" + bid})
+        self.assertEqual((s, j.get("removed")), (200, pid))
+        self.assertNotIn(pid, [p["id"] for p in self.api("GET", "/api/m/feed/posts?limit=50", B)[1]["posts"]], "unshared = gone for everyone")
+        self.assertEqual(self.api("GET", "/api/m/feed/shared?post=" + pid, B)[0], 404)
+        self.assertFalse(os.path.exists(os.path.join(self.cfg["data_dir"], "feed", "shared", pid + ".json")), "the copy is deleted")
+        print("\n  share build: post with read-only copy (diff, tests), comments + emoji; B still 404 on build/project, git clone 403; "
+              "B can not unshare; A unshares -> post + copy gone")
 
-    def test_23_publish_now_admin_only(self):
-        if not hasattr(type(self), "slot"):
-            self.test_22_published_read_only_and_social()
-        self.assertEqual(self.api("POST", "/api/m/team-feed/publish-now", B, {"confirm": True})[0], 403)
-        self.assertEqual(self.api("POST", "/api/m/team-feed/publish-now", ADMIN, {})[0], 400, "admin must confirm")
-        s, j = self.api("POST", "/api/m/team-feed/publish-now", ADMIN, {"confirm": True})
+    def test_22_share_project_and_version(self):
+        if not hasattr(type(self), "bid"):
+            self.test_20_private_until_shared()
+        a = self.me(A)["id"]
+        s, j = self.api("POST", "/api/m/feed/share", A, {"kind": "project", "project": "my-sandbox"})
         self.assertEqual(s, 200, j)
-        self.assertTrue(j["week"]["manual"])
-        self.assertGreaterEqual(j["count"], 1)
-        time.sleep(1.1)
-        s, j2 = self.api("POST", "/api/m/team-feed/publish-now", ADMIN, {"confirm": True})
-        self.assertEqual(j2["count"], 0, "nothing is published twice")
-        print("\n  publish now: member 403, admin w/o confirm 400, admin OK (%d new item(s), labelled manual); again -> 0" % j["count"])
+        d = self.api("GET", "/api/m/feed/shared?post=" + j["post"]["id"], B)[1]["post"]["data"]
+        self.assertIn("add.py", d["files"])
+        self.assertIn("add.py", d["stat"], "the project copy shows its changes since the starter")
+        self.assertTrue(d["commits"])
+        s, j2 = self.api("POST", "/api/m/feed/share", A, {"kind": "version", "model": "chat-llama", "version": type(self).vid})
+        self.assertEqual(s, 200, j2)
+        d2 = self.api("GET", "/api/m/feed/shared?post=" + j2["post"]["id"], B)[1]["post"]["data"]
+        self.assertEqual(d2["settings"], {"system_prompt": "Be terse.", "temperature": 0.1})
+        self.assertEqual(self.api("GET", "/api/sandboxes/%s/my-sandbox" % a, B)[0], 404, "still no access to the project")
+        # an admin can take a shared post off the feed (like any post); the owner can also just delete it
+        self.assertEqual(self.api("POST", "/api/m/feed/post/delete", ADMIN, {"id": j["post"]["id"]})[0], 200)
+        self.assertEqual(self.api("POST", "/api/m/feed/unshare", A, {"key": "version:%s:chat-llama:%s" % (a, type(self).vid)})[0], 200)
+        self.assertEqual(self.api("GET", "/api/m/feed/shares", A)[1]["shares"], {})
+        print("\n  share project (files, commits, diff since starter) + settings version: B sees read-only copies; project still 404; removed again")
 
-    def test_24_clock_math_timezone_dst(self):
-        tf = self.tf
-        chi = team_feed.ZoneInfo("America/Chicago")
-        at = lambda *a: dt.datetime(*a, tzinfo=chi).timestamp()  # noqa: E731
-        self.assertEqual(tf.slot_on_or_before(at(2026, 10, 27, 13, 59)).strftime("%Y-%m-%d %H:%M"), "2026-10-20 14:00")
-        self.assertEqual(tf.slot_on_or_before(at(2026, 10, 27, 14, 0)).strftime("%Y-%m-%d %H:%M"), "2026-10-27 14:00")
-        self.assertEqual(tf.next_slot(at(2026, 10, 21, 9, 0)).strftime("%Y-%m-%d %H:%M"), "2026-10-27 14:00")
-        s = tf.next_slot(at(2026, 10, 28, 9, 0))                                      # after the DST change (Nov 1)
-        self.assertEqual(s.strftime("%Y-%m-%d %H:%M %Z"), "2026-11-03 14:00 CST")
-        self.assertEqual(dt.datetime.fromtimestamp(s.timestamp(), dt.timezone.utc).strftime("%H:%M"), "20:00")
-        self.assertEqual(dt.datetime.fromtimestamp(at(2026, 10, 27, 14, 0), dt.timezone.utc).strftime("%H:%M"), "19:00", "CDT before")
-        r = subprocess.run([sys.executable, "-m", "teambox.modules.team_feed", "--config", self.cfgp], cwd=ROOT, capture_output=True,
-                           text=True, timeout=60, env=dict(os.environ, TEAMBOX_ALLOW_DEV="1"))
-        self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertEqual(json.loads(r.stdout)["published"], None, "the systemd-timer CLI: nothing due right now -> publishes nothing")
-        print("\n  clock: Tue 13:59 -> previous week, 14:00 -> this week; 14:00 = 19:00 UTC (CDT) and 20:00 UTC after DST (CST); "
-              "CLI --tick: %s" % r.stdout.strip())
-
+    def test_23_no_weekly_publish_left(self):
+        """Marjus: 'take the weekly thing off' - no scheduler, timer, config, UI, route, tour/how-it-works/prompt text."""
+        self.assertFalse(os.path.exists(os.path.join(ROOT, "teambox", "modules", "team_feed.py")))
+        for f in ("teambox-feed.service", "teambox-feed.timer"):
+            self.assertFalse(os.path.exists(os.path.join(ROOT, "systemd", f)))
+        self.assertNotIn("team-feed", [m["id"] for m in self.api("GET", "/api/modules", A)[1]["modules"]])
+        for path in ("/api/m/team-feed/weeks", "/api/m/team-feed/pending"):
+            self.assertEqual(self.api("GET", path, A)[0], 404)
+        self.assertEqual(self.api("POST", "/api/m/team-feed/publish-now", ADMIN, {"confirm": True})[0], 404)
+        bad = ("team_feed", "team-feed", "publish-now", "publish_now", "Tuesday", "14:00", "publish_weekday", "publish_time", "teambox-feed")
+        hits = []
+        for dp, _ds, fs in os.walk(ROOT):
+            if any(x in dp for x in (".git", "__pycache__", os.sep + "tests", os.sep + "data", os.sep + "out")):
+                continue
+            for f in fs:
+                if f.endswith((".py", ".js", ".html", ".json", ".md", ".service", ".timer", ".css", ".txt", ".example")):
+                    for ln in readf(os.path.join(dp, f)).splitlines():
+                        if any(x in ln for x in ("remov", "no longer", "older version", "gone")):
+                            continue                     # upgrade notes that say how to take the old service away
+                        for w in bad:
+                            if w in ln:
+                                hits.append("%s: %s" % (os.path.relpath(os.path.join(dp, f), ROOT), w))
+        self.assertEqual(hits, [], "no weekly-publish code paths or text remain")
+        t = self.api("GET", "/api/tour", A)[1]
+        for w in ("Tuesday", "weekly", "14:00"):
+            self.assertNotIn(w, json.dumps(t))
+        print("\n  weekly publish gone: module/timer files absent, routes 404, no 'Tuesday/14:00/weekly/team-feed' anywhere outside tests/")
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

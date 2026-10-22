@@ -9,6 +9,7 @@ import re
 import subprocess
 import tempfile
 
+from . import identity
 from .sandboxes import GIT, SAFE, SandboxError, git
 
 PATH_RX = re.compile(r"^/git/([a-z0-9][a-z0-9-]{0,62})/([a-z0-9][a-z0-9-]{0,39})\.git(/info/refs|/git-upload-pack|/git-receive-pack)$")
@@ -100,7 +101,7 @@ def handle(app, handler, method, path, query):
     if not who:
         return deny(handler, 401, "a team box token is needed (make one on your Profile page; use it as the password)")
     who_email = app.store.email_for(who) or ""
-    is_admin = who_email in app.cfg["admin_emails"]
+    is_admin = identity.is_admin(app.cfg, who_email, app.auth.account(who_email))
     if who != slug and not (is_admin and service == "git-upload-pack"):
         return deny(handler, 403, "this token can only reach its owner's own sandboxes")
     try:

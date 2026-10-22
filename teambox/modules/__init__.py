@@ -1,15 +1,16 @@
-"""EXTENSION SLOTS for the next agents. Each module in this package exports:
+"""EXTENSION SLOTS. Each module in this package exports:
     MODULE = {"id", "title", "nav", "status": "coming soon" | "live", "summary", "help"}
     optional: init(app)        called once when the routes are mounted (keep per-app state in app.ext[<id>])
     optional: routes(app) -> {(method, path): handler(req)}   (req = server.Req; return (code, obj)) - JSON in, JSON out
     optional: raw_routes(app) -> {(method, path): handler(http_handler, req)}   the body is NOT read (uploads, file downloads):
               the handler reads/writes the HTTP itself. Identity + the X-Teambox header on POST are still checked by the server.
-    optional: start(app)       background work (schedulers); called by server.main only, never by the tests
+    optional: start(app)       background work; called by server.main only, never by the tests
 The server lists every module in the nav (GET /api/modules) and mounts its routes under /api/m/<id>/... when status is "live".
-To build one: fill in its file, set status "live", add routes, add its view to static/app.js (window.TB.views[<id>])."""
-from . import feed, messages, team_feed
+To build one: fill in its file, set status "live", add routes, add its view to static/app.js (window.TB.views[<id>]).
+(2026-10-21: the scheduled team feed was removed - work reaches the home feed only through the owner's "Share to feed".)"""
+from . import feed, messages
 
-ALL = [feed, team_feed, messages]
+ALL = [feed, messages]
 
 
 def registry():

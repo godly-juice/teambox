@@ -1,4 +1,4 @@
-"""Comments + emoji reactions, shared by the home feed and the weekly team feed.
+"""Comments + emoji reactions, used by the home feed (posts and shared copies).
 A thing that can be commented on is a dict with "comments": [...] and "reactions": {emoji: [member slugs]}.
 Reactions are a fixed set of emoji (no free text), one toggle per member per emoji."""
 import secrets

@@ -127,7 +127,7 @@ class Sandboxes:
 
     def ensure_default(self, slug):
         if not self.list(slug):
-            self.create(slug, DEFAULT_NAME, "My sandbox")
+            self.create(slug, DEFAULT_NAME, "My project")
 
     def list(self, slug):
         d = os.path.join(self.root, slug)

@@ -12,7 +12,7 @@
 <header class="top"><a class="brand" href="/">Team box</a><span class="who">How it works (public page)</span></header>
 <main class="page">
 <h1>How the team box works</h1>
-<div class="banner">TEAM SANDBOX - this is the team's shared workspace on the team computer. Not your computer, not Marjus's computer.</div>
+<div class="banner">TEAM PROJECT SPACE - on the team computer, not your computer and not Marjus's computer</div>
 <p>This page explains, in plain words, what team.xseed.ing is, what it stores, who can see what, and how you can check each claim
 yourself. It is public on purpose, so that you - or an AI you trust - can read it before signing in.</p>
 
@@ -23,24 +23,51 @@ owner's shared AI models only through one narrow, capped door on BESNIK: the <em
 shared models and start/stop within caps.</p>
 
 <h2 id="signin">Signing in</h2>
-<p>The address is protected by Cloudflare Access: you sign in with your email (a one-time code). The app trusts that email only when
-the request arrives through the team box's own Cloudflare tunnel, and (when switched on) after checking Cloudflare's signed login token.
-Admins are the owner's email address(es), set in the box's configuration; everyone else is a team member.</p>
+<p><strong>Accounts exist only by invitation.</strong> There is no sign-up form. Marjus - or Lumi, his AI assistant, on his behalf -
+makes an invite for a person with their name, phone or email and what they are there to do. The invite is a one-time
+<strong>12-digit code</strong>. Lumi sends it by email or reads it out on a phone call. It works <strong>once</strong>, expires after
+<strong>48 hours</strong> (the box's setting), and locks after 5 wrong tries. The team box stores only a salted, slow hash of it.</p>
+<p>On your first visit (team.xseed.ing/join) you type the code, then choose:</p>
+<ul>
+<li>a <strong>sign-in name</strong>: your phone number, your email or a name you will remember;</li>
+<li>a <strong>PIN</strong>: your sign-in code, digits only, at least 6, not an easy one like 123456. It is stored only as a salted,
+slow hash (scrypt with a secret key of the box);</li>
+<li>a <strong>vault password</strong> for your <a href="#vault">vault</a> - this one never leaves your browser;</li>
+<li>then, if you like, a few profile details (you can skip this).</li>
+</ul>
+<p>Later you sign in with your sign-in name and PIN. Your session is a cookie marked <code>HttpOnly</code>, <code>Secure</code> and
+<code>SameSite=Lax</code>; it ends after a while without activity (4 hours by default) and after 3 days at most, and "Sign out
+everywhere" on your Profile ends every session at once. Wrong PINs lock the account for a while (longer each time), and too many wrong
+tries from one network are blocked for a while. <strong>Nobody - not Marjus, not Lumi - will ever ask you for your PIN or your vault
+password.</strong></p>
+<p>Cloudflare Access (an email login in front of the site) is switched off; it can be switched back on as an extra outer lock in the
+box's configuration. Git tokens for your own AI tools are a separate login for git only (see below). Admins are the accounts Marjus
+made as admin when the box was installed.</p>
 
-<h2 id="sandboxes">Sandboxes</h2>
-<p>Each member gets a private sandbox and can create more. A sandbox is a git repository on the team box that starts from a clean
-template: a README, guardrail files for AI tools, and a tiny example. It never contains a copy of anyone's own files or of BESNIK's code.
-<strong>Only you and the admins can see your sandboxes, builds, chats and settings versions</strong> - the server checks this on every
-request, for the web pages, the API and git. Asking for someone else's sandbox gets the same answer as asking for one that does not
-exist. The one exception is the weekly <a href="#team-feed">team feed</a>: every Tuesday at 14:00 it shows the team read-only
-copies of what you made (never your chats, never access to the sandbox itself).</p>
+<h2 id="projects">Projects</h2>
+<p>Each member gets a private project and can create more. (The site's addresses still say "sandbox" in places; it is the same
+thing.) Your <strong>first project</strong> is made for you from what Marjus said you are there to do. A project is a git
+repository on the team box that starts from a clean template: a README, guardrail files for AI tools, and a tiny example. It never
+contains a copy of anyone's own files or of BESNIK's code. <strong>Only you and the admins can see your projects, builds, chats,
+vault and settings versions</strong> - the server checks this on every request, for the web pages, the API and git. Asking for
+someone else's project gets the same answer as asking for one that does not exist. The one way to show your work to the team is
+the <a href="#sharing">Share to feed</a> button.</p>
+
+<h2 id="sharing">Share to feed</h2>
+<p>On one of your projects, builds or settings versions you can press <strong>Share to feed</strong>. That posts a
+<strong>read-only copy</strong>, taken at that moment, to the home feed: for a build the task, summary, changed files, diff and test
+results; for a project its file list, its commits and its changes since the starter template; for a settings version its name and
+settings (including the system prompt). Everyone on the team can comment on it and react with an emoji. <strong>Unshare</strong> removes
+the post and its copy. Only the owner can share something; there is no automatic or scheduled publishing. Sharing never gives anyone
+access to the project itself, its builds page or its git remote: those still answer "no such ..." / 403 to everyone but you and the
+admins. Your chats and your vault are never shared.</p>
 
 <h2 id="builds">AI builds</h2>
-<p>You describe a task; a shared model (through the team gateway, under your account's caps) works in your sandbox with a fixed set of
+<p>You describe a task; a shared model (through the team gateway, under your account's caps) works in your project with a fixed set of
 tools: list, read, search, write, edit, run a test, list checkpoints, roll back, finish. Every accepted change is saved as a checkpoint
 (a git commit). One build per person at a time, and only a few on the whole box at once.</p>
 <p><strong>The jail.</strong> Every test - from the AI builder, from your pushes, or from "Run tests now" - runs inside bubblewrap on a
-throw-away copy of that one sandbox: no network at all, its own process space, a fake minimal /etc, no view of other sandboxes, the
+throw-away copy of that one project: no network at all, its own process space, a fake minimal /etc, no view of other projects, the
 app, the box's data or any secret, a memory limit, a process limit, a file-size limit and a time limit. When the test ends, the copy
 is deleted.</p>
 <p><strong>The safety check (tripwire).</strong> If a test the AI builder wants to run contains a word that a test never needs (for
@@ -54,9 +81,9 @@ word, the line and why, and keeps working without it - the build never waits. An
 model's limits, and when it refuses something (for example a start over your caps) you see its reason word for word.</p>
 
 <h2 id="byo">Bring your own AI tool</h2>
-<p>Every sandbox is also a git remote: <code>https://team.xseed.ing/git/&lt;your-id&gt;/&lt;sandbox&gt;.git</code>. You authenticate with
+<p>Every project is also a git remote: <code>https://team.xseed.ing/git/&lt;your-id&gt;/&lt;sandbox&gt;.git</code>. You authenticate with
 a token you make on your profile page. It is shown once, stored only as a hash, and you can revoke it any time. A token reaches only
-its owner's sandboxes; admins can read every sandbox and cannot push to yours. Each sandbox contains CLAUDE.md, AGENTS.md, GEMINI.md,
+its owner's projects; admins can read every project and cannot push to yours. Each project contains CLAUDE.md, AGENTS.md, GEMINI.md,
 .cursorrules, .cursor/rules, .github/copilot-instructions.md and opencode.json. They tell AI tools that this is a team sandbox on a
 shared server, to stay inside the repository, never to probe or escape anything, and to refuse if asked. <strong>Those files are guidance
 only. A tool can ignore them. The protection is the server's jail, the token check and admin-only promote.</strong> Every push that changes
@@ -71,23 +98,12 @@ only.</p>
 <p>The owner decides how much model memory and how many running models each account may use. The team gateway on BESNIK enforces
 this. The team box cannot change it.</p>
 
-<h2 id="team-feed">Team feed (every Tuesday 14:00)</h2>
-<p>Every Tuesday at 2 pm, team box time (America/Chicago unless the box's configuration says otherwise), everything members made
-before that moment and not yet published becomes visible to the whole team in <em>Team feed</em>:</p>
-<ul>
-<li>finished builds (AI builds and pushes from your own AI tool): the task, the summary, the changed files, the diff and the test results;</li>
-<li>commits on your sandboxes' main branch (the list and the changes);</li>
-<li>new sandboxes you made (their file list; your automatic "my-sandbox" is not announced);</li>
-<li>the settings versions you saved for a model (name and settings, including the system prompt).</li>
-</ul>
-<p>Everyone on the team can comment on each item and react with an emoji. <strong>Before the Tuesday publish, your work is visible only
-to you and the admins</strong>, exactly as described above. A build that is still running waits for the next Tuesday. What is published is
-a <strong>read-only copy made at 14:00</strong> and kept by the team feed. It does not give anyone access to your sandbox, your builds
-page or your git remote: those still answer "no such ..." / 403 to everyone but you and the admins. Your chats are never published.
-The Team feed page lists "your work that goes out next time", so you can see in advance exactly what will be shown.</p>
-<p>The publish runs inside the app (checked every minute). If the team box was off at 14:00 it publishes as soon as it is back, and
-that week is marked "published late". Each Tuesday is recorded and published once, even if the check runs twice. Admins can "publish
-now" for testing; that is shown as an "Early publish", and the next Tuesday then publishes only what is new.</p>
+<h2 id="lumi">Lumi's welcome</h2>
+<p>When your setup is done you land in a chat with <strong>Lumi</strong>, Marjus's AI assistant. The chat goes to the team's shared AI
+model through the owner's team gateway, under your own account and caps. The team box writes Lumi's instructions from a fixed template
+that contains what Marjus said you are there to do and the links to the areas of this site, so her first message tells you where to
+do what and points you to your first project. If no model answers, you get a fixed welcome text that says why. The chat is saved
+under your profile like any other chat (Models &amp; chat).</p>
 
 <h2 id="home">Home feed</h2>
 <p>The home page has the team's feed: anyone can post text and attach files. Everyone on the team sees the home feed and can comment
@@ -146,15 +162,27 @@ that was tampered with could serve different page code. A modified browser could
 recording arrived. The server can not tell disguised plain data from real encryption with certainty; its checks catch mistakes, not a
 determined cheater.</p>
 
+<h2 id="vault">Your vault</h2>
+<p>The vault keeps your personal notes and files, <strong>encrypted in your browser</strong>. When you set it up, your browser makes a
+random vault key and locks it with a key made from your vault password (PBKDF2-SHA256 with at least 600,000 rounds and a random salt).
+The team box stores only that locked key, so your vault opens on any device after you type the password - and the team box never
+receives the password, the vault key or anything you put in the vault. Each note or file gets its own key, which is locked twice:
+for your vault key and for <strong>Lumi's public key</strong>. So <strong>Lumi can read your vault</strong>, like messages; the
+monitoring notice covers it. Files are uploaded in encrypted pieces. Changing the vault password re-locks the vault key (your PIN is
+asked too, so a stolen session can not swap it). A forgotten vault password can not be recovered by you or by the team box (Lumi can
+still read the items). The server checks that what it stores looks encrypted and is locked for exactly your vault key and Lumi.</p>
+
 <h2 id="stored">What is stored today, and who can see it</h2>
 <ul>
-<li>Your profile (email, display name, language, tour progress), your sandboxes, builds and their transcripts, your chats with the AIs
-and your settings versions. All of this is on the team box's disk, under your member folder. You and the admins (and whoever operates
-the machine) can read it. It is <strong>not encrypted at rest yet</strong>.</li>
-<li>Home feed posts, their files, comments and reactions (visible to every team member), and the team feed's read-only copies of
-published work. Also not encrypted at rest.</li>
-<li>Messages, attachments and call recordings: <strong>encrypted only</strong> (see above), plus their metadata, your notice acceptance
-(email, time, notice version) and your browsers' public keys.</li>
+<li>Your account: your sign-in name, a hash of your PIN, the name and purpose from your invite, and your sessions (a hash of each
+session cookie, when it started, the network address).</li>
+<li>Your profile (display name, language, anything you added), your projects, builds and their transcripts, your chats with the AIs
+(including Lumi's welcome) and your settings versions. All of this is on the team box's disk, under your member folder. You and the
+admins (and whoever operates the machine) can read it. It is <strong>not encrypted at rest yet</strong>.</li>
+<li>Home feed posts, their files, comments and reactions (visible to every team member), including the read-only copies of work its
+owners shared. Also not encrypted at rest. Unsharing or deleting a post deletes its copy and files.</li>
+<li>Messages, attachments, call recordings and your vault: <strong>encrypted only</strong> (see above), plus their metadata, your notice
+acceptance (time, notice version) and your browsers' public keys.</li>
 <li>Your git tokens: only a hash of each one.</li>
 <li>On BESNIK, the team gateway logs usage numbers per account (model, tokens, seconds), not the text of your chats.</li>
 </ul>

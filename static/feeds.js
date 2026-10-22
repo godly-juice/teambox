@@ -1,6 +1,7 @@
-/* Home feed + weekly team feed views (modules "feed" and "team-feed"). Loaded after app.js; uses TB.h / TB.api.
-   Everything a member wrote is put on the page with textContent (TB.h "text"), previews of notes/spreadsheets are strings in <pre>
-   or table cells - never HTML. Pictures/videos come from /api/m/feed/file (served inline only for those types). */
+/* Home feed view (module "feed") + "Share to feed" (a read-only copy of a project, build or settings version, posted by its owner).
+   Loaded after app.js; uses TB.h / TB.api. Everything a member wrote is put on the page with textContent (TB.h "text"), previews of
+   notes/spreadsheets are strings in <pre> or table cells - never HTML. Pictures/videos come from /api/m/feed/file (served inline only
+   for those types). There is no scheduled publishing: nothing reaches the feed unless its owner presses "Share to feed". */
 (function () {
   "use strict";
   var TB = window.TB, h = TB.h, api = TB.api;
@@ -18,7 +19,7 @@
   }
   function replace(el, node) { el.textContent = ""; if (node) el.appendChild(node); }
 
-  // ---------------------------------------------------------------- comments + reactions (both feeds)
+  // ---------------------------------------------------------------- comments + reactions
   function social(base, idKey, id, data) {
     var box = h("div", { class: "social" });
     function paint(d) {
@@ -54,7 +55,7 @@
     return box;
   }
 
-  // ---------------------------------------------------------------- home feed
+  // ---------------------------------------------------------------- attachments
   function attachment(a) {
     var wrap = h("div", { class: "att" });
     if (a.kind === "picture") wrap.appendChild(h("a", { href: a.url, target: "_blank", rel: "noopener" }, h("img", { src: a.url, alt: a.name, loading: "lazy" })));
@@ -77,6 +78,42 @@
     return h("div", { class: "tbl" }, t, h("p", { class: "muted", text: "First " + (p.rows || []).length + " rows (download for the whole file)." }));
   }
 
+  // ---------------------------------------------------------------- shared copies (Share to feed)
+  var KIND_LABEL = { project: "shared project", build: "shared build", version: "shared settings version" };
+  function sharedData(kind, d) {
+    var box = h("div", { class: "shared-copy" });
+    box.appendChild(h("p", { class: "muted", text: "Read-only copy, taken when it was shared. It does not give anyone access to the project or its git remote." }));
+    if (kind === "build") {
+      box.appendChild(h("h3", { text: "Task" })); box.appendChild(h("pre", { text: d.task || "" }));
+      if (d.summary) { box.appendChild(h("h3", { text: "Summary" })); box.appendChild(h("pre", { text: d.summary })); }
+      box.appendChild(h("h3", { text: "Files changed" }));
+      box.appendChild((d.files || []).length ? h("ul", {}, d.files.map(function (f) { return h("li", {}, h("code", { text: f.status + " " + f.path })); })) : h("p", { class: "muted", text: "-" }));
+      box.appendChild(h("h3", { text: "Tests (run in the jail)" })); box.appendChild(h("pre", { text: d.tests_text || "(none)" }));
+      box.appendChild(h("h3", { text: "Diff" })); box.appendChild(diffPre(d.diff));
+    } else if (kind === "project") {
+      box.appendChild(h("p", { text: (d.files || []).length + " files - created " + (d.created || "") }));
+      if ((d.commits || []).length) box.appendChild(h("div", { class: "tbl" }, h("table", {}, d.commits.map(function (c) { return h("tr", {}, h("td", {}, h("code", { text: c.sha })), h("td", { text: c.at }), h("td", { text: c.subject })); }))));
+      box.appendChild(h("h3", { text: "Changes since the starter template" })); box.appendChild(h("pre", { text: d.stat || "(none)" })); box.appendChild(diffPre(d.diff));
+      box.appendChild(h("h3", { text: "Files" }));
+      box.appendChild(h("ul", {}, (d.files || []).slice(0, 200).map(function (f) { return h("li", {}, h("code", { text: f })); })));
+    } else if (kind === "version") {
+      box.appendChild(h("p", { text: "Model: " + d.model + " - version '" + d.name + "' - saved " + (d.created || "") }));
+      box.appendChild(h("pre", { text: JSON.stringify(d.settings, null, 2) }));
+    }
+    return box;
+  }
+  function sharedBlock(p) {
+    var s = p.shared, more = h("div"), sm = s.summary || {};
+    return h("div", { class: "card shared" },
+      h("div", { class: "row" }, pill(KIND_LABEL[s.kind] || s.kind, "ok"), h("strong", { text: s.title }),
+        sm.verdict ? pill(sm.verdict, /pass/.test(sm.verdict) ? "ok" : /FAIL/.test(sm.verdict) ? "bad" : "") : null),
+      sm.summary ? h("p", { text: sm.summary }) : sm.task ? h("p", { class: "muted", text: sm.task }) : null,
+      h("button", { class: "ghost small", type: "button", onclick: function () {
+        if (more.firstChild) { more.textContent = ""; return; }
+        api("GET", "/api/m/feed/shared?post=" + encodeURIComponent(p.id)).then(function (j) { replace(more, sharedData(s.kind, j.post.data || {})); }).catch(function (e) { replace(more, err(e)); });
+      } }, "Open the read-only copy"), more);
+  }
+
   function postNode(p, emoji, reload) {
     var body = h("div", { class: "ptext", text: p.text });
     var card = h("article", { class: "card post", id: "post-" + p.id });
@@ -88,16 +125,46 @@
         api("POST", "/api/m/feed/post/edit", { id: p.id, text: ta.value }).then(reload).catch(function (e) { replace(out, err(e)); });
       } }, "Save"), h("button", { class: "ghost small", type: "button", onclick: reload }, "Cancel")), out));
     } }, "edit"));
-    if (p.can_delete) tools.appendChild(h("button", { class: "linkish", type: "button", onclick: function () {
+    if (p.shared && p.can_edit) tools.appendChild(h("button", { class: "linkish", type: "button", onclick: function () {
+      if (!confirm("Unshare? The post and its copy are removed from the feed.")) return;
+      api("POST", "/api/m/feed/unshare", { key: p.shared.key }).then(function () { TB.shares = null; reload(); }).catch(function (e) { card.appendChild(err(e)); });
+    } }, "unshare"));
+    else if (p.can_delete) tools.appendChild(h("button", { class: "linkish", type: "button", onclick: function () {
       if (!confirm(p.can_edit ? "Delete your post and its files?" : "Delete this post (admin)?")) return;
       api("POST", "/api/m/feed/post/delete", { id: p.id }).then(reload).catch(function (e) { card.appendChild(err(e)); });
     } }, "delete"));
     card.appendChild(h("div", { class: "row phead" }, h("strong", { text: p.author_name }), h("span", { class: "muted", text: p.created + (p.edited ? " (edited)" : "") }), tools));
-    card.appendChild(body);
+    if (p.text) card.appendChild(body);
+    if (p.shared) card.appendChild(sharedBlock(p));
     p.attachments.forEach(function (a) { card.appendChild(attachment(a)); });
     card.appendChild(social("/api/m/feed", "post", p.id, p));
     return card;
   }
+
+  // ---------------------------------------------------------------- the "Share to feed" / "Unshare" button (used by app.js)
+  function loadShares() {
+    if (!TB.shares) TB.shares = api("GET", "/api/m/feed/shares").then(function (j) { return j.shares || {}; }).catch(function () { return {}; });
+    return TB.shares;
+  }
+  TB.shareButton = function (body, key) {
+    var wrap = h("span", { class: "share-box" }), out = h("span");
+    function paint(shared) {
+      wrap.textContent = "";
+      wrap.appendChild(shared
+        ? h("button", { class: "ghost small", type: "button", "data-share": key, onclick: function () {
+            if (!confirm("Unshare? The read-only copy is removed from the home feed.")) return;
+            api("POST", "/api/m/feed/unshare", { key: key }).then(function () { TB.shares = null; paint(false); }).catch(function (e) { replace(out, err(e)); });
+          } }, "Unshare (on the feed now)")
+        : h("button", { class: "small", type: "button", "data-share": key, onclick: function () {
+            var note = prompt("Share a read-only copy to the home feed - the whole team will see it. Add a note (optional):", "");
+            if (note === null) return;
+            api("POST", "/api/m/feed/share", Object.assign({ text: note }, body)).then(function () { TB.shares = null; paint(true); }).catch(function (e) { replace(out, err(e)); });
+          } }, "Share to feed"));
+      wrap.appendChild(out);
+    }
+    loadShares().then(function (s) { paint(!!s[key]); });
+    return wrap;
+  };
 
   function upload(file, onProgress) {
     return new Promise(function (resolve, reject) {
@@ -150,6 +217,7 @@
         el.textContent = "";
         if (!noTitle) el.appendChild(h("h2", { text: "Home feed" }));
         el.appendChild(composer(j.limits, load));
+        el.appendChild(h("p", { class: "muted small", text: "Your projects, builds and settings versions stay private until you press 'Share to feed' on one of them." }));
         if (!j.posts.length) el.appendChild(h("p", { class: "muted", text: "No posts yet - be the first." }));
         j.posts.forEach(function (p) { el.appendChild(postNode(p, j.emoji, load)); });
       }).catch(function (e) { replace(el, err(e)); });
@@ -162,84 +230,4 @@
     v.appendChild(h("h1", { text: m.title })); v.appendChild(h("p", { class: "muted", text: m.help }));
     var el = h("div", { id: "home-feed" }); v.appendChild(el); homeFeed(el, true);
   };
-
-  // ---------------------------------------------------------------- weekly team feed
-  var TYPE_LABEL = { build: "build", commits: "commits", sandbox: "new sandbox", version: "settings version" };
-  function tfView(m) {
-    var v = document.getElementById("view"); v.textContent = "";
-    var p = (location.hash || "").split("/").slice(3).map(decodeURIComponent);    // #/m/team-feed/<week|item>/<id>
-    if (p[0] === "item" && p[1]) return tfItem(v, p[1]);
-    api("GET", "/api/m/team-feed/weeks").then(function (w) {
-      v.appendChild(h("h1", { text: m.title }));
-      v.appendChild(h("p", { text: "Published " + w.schedule + ". Next: " + w.next_publish + ". Until then, everyone's new work stays private (owner + admins). Published work is a read-only copy - nobody gets access to anyone's sandbox." }));
-      var pend = h("div", { class: "card" }, h("h3", { text: TB.me.admin ? "Waiting for the next publish (all members)" : "Your work that goes out next time" }));
-      v.appendChild(pend);
-      api("GET", "/api/m/team-feed/pending").then(function (j) {
-        pend.appendChild(j.pending.length ? h("ul", {}, j.pending.map(function (x) { return h("li", { text: (TB.me.admin ? x.owner_name + ": " : "") + (TYPE_LABEL[x.type] || x.type) + ": " + x.title }); }))
-          : h("p", { class: "muted", text: "Nothing yet." }));
-        pend.appendChild(h("p", { class: "muted small", text: j.note }));
-      }).catch(function (e) { pend.appendChild(err(e)); });
-      if (w.admin) {
-        var out = h("div");
-        v.appendChild(h("div", { class: "card" }, h("h3", { text: "Admin: publish now (for testing)" }),
-          h("p", { class: "muted", text: "Makes everything that exists right now visible to the whole team. Tuesday then publishes only what is new." }),
-          h("button", { class: "ghost", type: "button", onclick: function () {
-            if (!confirm("Publish everyone's work now, to the whole team?")) return;
-            api("POST", "/api/m/team-feed/publish-now", { confirm: true }).then(function () { tfView(m); }).catch(function (e) { replace(out, err(e)); });
-          } }, "Publish now"), out));
-      }
-      if (!w.weeks.length) v.appendChild(h("p", { class: "muted", text: "Nothing has been published yet." }));
-      var sel = p[0] === "week" && p[1] ? p[1] : (w.weeks[0] && w.weeks[0].key);
-      if (w.weeks.length) {
-        v.appendChild(h("div", { class: "row weeks" }, w.weeks.map(function (x) {
-          return h("a", { class: "btn small" + (x.key === sel ? "" : " ghost"), href: "#/m/team-feed/week/" + encodeURIComponent(x.key),
-            text: (x.manual ? "Early publish " + x.published_text : "Tuesday " + x.key) + " (" + x.count + ")" });
-        })));
-        var list = h("div"); v.appendChild(list);
-        api("GET", "/api/m/team-feed/items?week=" + encodeURIComponent(sel)).then(function (j) {
-          if (j.week.late) list.appendChild(h("p", { class: "muted", text: "Published late (" + j.week.published_text + ") - the team box was off at 14:00 and caught up." }));
-          if (!j.items.length) list.appendChild(h("p", { class: "muted", text: "Nothing new that week." }));
-          j.items.forEach(function (it) { list.appendChild(tfCard(it)); });
-        }).catch(function (e) { list.appendChild(err(e)); });
-      }
-    }).catch(function (e) { v.appendChild(err(e)); });
-  }
-  function tfCard(it) {
-    return h("article", { class: "card post" },
-      h("div", { class: "row phead" }, pill(TYPE_LABEL[it.type] || it.type), h("strong", { text: it.owner_name }), h("span", { class: "muted", text: it.created || "" }),
-        it.verdict ? pill(it.verdict, /pass/.test(it.verdict) ? "ok" : /FAIL/.test(it.verdict) ? "bad" : "") : null),
-      h("h3", {}, h("a", { href: "#/m/team-feed/item/" + it.id, text: it.title })),
-      h("div", { class: "row" }, it.reactions.filter(function (r) { return r.count; }).map(function (r) { return pill(r.emoji + " " + r.count); }),
-        h("a", { href: "#/m/team-feed/item/" + it.id, text: it.comment_count + " comment(s) - open" })));
-  }
-  function tfItem(v, id) {
-    api("GET", "/api/m/team-feed/item?id=" + encodeURIComponent(id)).then(function (j) {
-      var it = j.item, d = it.data || {};
-      v.appendChild(h("p", {}, h("a", { href: "#/m/team-feed/week/" + encodeURIComponent(it.week), text: "Back to the team feed" })));
-      v.appendChild(h("h1", { text: it.title }));
-      v.appendChild(h("div", { class: "row" }, pill(TYPE_LABEL[it.type] || it.type), pill(it.owner_name), d.status ? pill(d.status) : null,
-        d.verdict ? pill(d.verdict, /pass/.test(d.verdict) ? "ok" : /FAIL/.test(d.verdict) ? "bad" : "") : null));
-      v.appendChild(h("p", { class: "muted", text: "Read-only copy, taken when it was published. It does not give anyone access to the sandbox or its git remote." }));
-      if (it.type === "build") {
-        v.appendChild(h("h2", { text: "Task" })); v.appendChild(h("pre", { text: d.task || "" }));
-        if (d.summary) { v.appendChild(h("h2", { text: "Summary" })); v.appendChild(h("pre", { text: d.summary })); }
-        v.appendChild(h("h2", { text: "Files changed" }));
-        v.appendChild(d.files.length ? h("ul", {}, d.files.map(function (f) { return h("li", {}, h("code", { text: f.status + " " + f.path })); })) : h("p", { class: "muted", text: "-" }));
-        v.appendChild(h("h2", { text: "Tests (run in the jail)" })); v.appendChild(h("pre", { text: d.tests_text || "(none)" }));
-        v.appendChild(h("h2", { text: "Diff" })); v.appendChild(diffPre(d.diff));
-      } else if (it.type === "commits") {
-        v.appendChild(h("div", { class: "tbl" }, h("table", {}, d.commits.map(function (c) { return h("tr", {}, h("td", {}, h("code", { text: c.sha })), h("td", { text: c.at }), h("td", { text: c.author }), h("td", { text: c.subject })); }))));
-        v.appendChild(h("h2", { text: "Changes" })); v.appendChild(h("pre", { text: d.stat || "" })); v.appendChild(diffPre(d.diff));
-      } else if (it.type === "version") {
-        v.appendChild(h("p", { text: "Model: " + d.model + " - version '" + d.name + "' - saved " + (d.created || "") }));
-        v.appendChild(h("pre", { text: JSON.stringify(d.settings, null, 2) }));
-      } else if (it.type === "sandbox") {
-        v.appendChild(h("p", { text: "Created " + (d.created || "") + " - " + d.files.length + " files" }));
-        v.appendChild(h("ul", {}, d.files.slice(0, 200).map(function (f) { return h("li", {}, h("code", { text: f })); })));
-      }
-      v.appendChild(h("h2", { text: "Comments & reactions" }));
-      v.appendChild(social("/api/m/team-feed", "item", it.id, it));
-    }).catch(function (e) { v.appendChild(err(e)); });
-  }
-  TB.views["team-feed"] = tfView;
 })();

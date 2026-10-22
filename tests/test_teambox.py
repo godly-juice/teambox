@@ -202,17 +202,19 @@ class TeamBoxTest(unittest.TestCase):
         self.assertEqual(s, 401, "no identity -> 401")
         self.app.cfg["dev_mode"] = False
         try:
-            s, j = self.api("GET", "/api/me", headers={"Cf-Access-Authenticated-User-Email": "carol@test.example"})
-            self.assertEqual((s, j.get("email"), j.get("role")), (200, "carol@test.example", "team"), "Access header from the local cloudflared")
+            s, j = self.api("GET", "/api/me", headers={"Cf-Access-Authenticated-User-Email": ADMIN})
+            self.assertEqual(s, 401, "the Cloudflare Access email header is NOT an identity any more (2026-10-21): %s" % j)
             s, j = self.api("GET", "/api/me", headers={"X-Dev-Email": A})
             self.assertEqual(s, 401, "dev header ignored when dev_mode is off")
+            s, j = self.api("GET", "/api/me", headers={"Cookie": "tb_session=made-up-session-token"})
+            self.assertEqual(s, 401, "a made-up session cookie gives nothing")
             self.app.cfg["trusted_proxy_ips"] = ["10.9.9.9"]
-            s, j = self.api("GET", "/api/me", headers={"Cf-Access-Authenticated-User-Email": ADMIN})
-            self.assertEqual(s, 401, "Access header NOT trusted from a peer that is not the local cloudflared: %s" % j)
+            s, j = self.api("GET", "/api/me", headers={"X-Dev-Email": ADMIN})
+            self.assertEqual(s, 401, "requests not from the local cloudflared are refused: %s" % j)
         finally:
             self.app.cfg["trusted_proxy_ips"] = ["127.0.0.1", "::1"]
             self.app.cfg["dev_mode"] = True
-        print("\n  identity: no header 401; Access email trusted only from 127.0.0.1; dev header ignored outside dev mode")
+        print("\n  identity: no session 401; Access email header alone 401; fake session 401; dev header ignored outside dev mode")
 
     def test_02_access_jwt(self):
         n, e, d = rsa_key()
@@ -227,19 +229,19 @@ class TeamBoxTest(unittest.TestCase):
         self.assertIsNone(identity.verify_access_jwt(bad_sig, acc)[0], "forged signature refused")
         self.assertIsNone(identity.verify_access_jwt(make_jwt(n, d, dict(good, aud=["other"])), acc)[0], "other app refused")
         self.assertIsNone(identity.verify_access_jwt(make_jwt(n, d, dict(good, exp=time.time() - 999)), acc)[0], "expired refused")
-        self.app.cfg["dev_mode"] = False
-        self.app.cfg["access"] = acc
+        self.app.cfg["access"] = dict(acc, enabled=False)
+        self.assertEqual(self.api("GET", "/api/me", A)[0], 200, "outer lock OFF (the default): no Access token needed")
+        self.app.cfg["access"] = dict(acc, enabled=True)
         try:
-            s, j = self.api("GET", "/api/me", headers={"Cf-Access-Authenticated-User-Email": ADMIN})
-            self.assertEqual(s, 401, "with JWT required, a bare (forgeable) email header gives nothing")
-            s, j = self.api("GET", "/api/me", headers={"Cf-Access-Jwt-Assertion": make_jwt(n, d, good), "Cf-Access-Authenticated-User-Email": "dana@test.example"})
-            self.assertEqual((s, j.get("email")), (200, "dana@test.example"))
-            s, j = self.api("GET", "/api/me", headers={"Cf-Access-Jwt-Assertion": make_jwt(n, d, good), "Cf-Access-Authenticated-User-Email": ADMIN})
-            self.assertEqual(s, 401, "header email must match the signed token")
+            s, j = self.api("GET", "/api/me", A, headers={"Cf-Access-Authenticated-User-Email": A})
+            self.assertEqual(s, 401, "outer lock ON: a bare (forgeable) email header gives nothing")
+            s, j = self.api("GET", "/api/me", A, headers={"Cf-Access-Jwt-Assertion": make_jwt(n, d, good)})
+            self.assertEqual((s, j.get("email")), (200, A), "outer lock ON + valid Access token: identity still from the app's own sign-in")
+            s, j = self.api("GET", "/api/me", A, headers={"Cf-Access-Jwt-Assertion": bad_sig})
+            self.assertEqual(s, 401, "forged Access token refused by the outer lock")
         finally:
             self.app.cfg["access"] = dict(C.DEFAULTS["access"])
-            self.app.cfg["dev_mode"] = True
-        print("\n  Access JWT: valid RS256 accepted; forged signature / other app / expired / mismatched email refused")
+        print("\n  Access JWT: valid RS256 accepted; forged signature / other app / expired refused; outer lock off by default, on = token required, identity unchanged")
 
     # ============================================================ 2. sandboxes + isolation
     def test_10_default_sandbox_is_clean_starter(self):
@@ -577,19 +579,19 @@ class TeamBoxTest(unittest.TestCase):
         self.assertTrue(me["first_visit"], "a new member is sent to the tour")
         s, t = self.api("GET", "/api/tour", "newbie@test.example")
         self.assertEqual(t["bottom_text"], EXACT_BOTTOM)
-        self.assertEqual([c["id"] for c in t["checkpoints"]], ["home", "sandboxes", "builds", "models", "byo", "team-feed", "messages", "caps", "promote"])
+        self.assertEqual([c["id"] for c in t["checkpoints"]], ["home", "projects", "builds", "models", "byo", "vault", "messages", "caps", "promote"])
         self.assertTrue(all(c["link"].startswith("#/") for c in t["checkpoints"]), "every checkpoint is clickable")
-        for claim in ("Sandbox isolation", "The jail", "Git tokens", "Caps", "Who can promote", "encrypted at rest", "Not my computer", "can NOT", "PARTLY"):
+        for claim in ("Project isolation", "The jail", "Git tokens", "Caps", "Who can promote", "encrypted at rest", "Not my computer", "can NOT", "PARTLY"):
             self.assertIn(claim, t["prompt"])
         self.assertIn("/how-it-works", t["prompt"])
         # Director merge 2026-10-21: feeds + messages are all live now, so the prompt must say LIVE for each and nothing is "not live yet"
-        for claim in ("9. Weekly team feed: LIVE", "10. Messages, calls and video calls with a must-accept monitoring notice: LIVE", "12. Home feed uploads: LIVE"):
+        for claim in ("9. Share to feed: LIVE", "10. Messages, calls and video calls with a must-accept monitoring notice: LIVE", "12. Home feed uploads: LIVE"):
             self.assertIn(claim, t["prompt"], "the prompt states what is live")
         self.assertNotIn("NOT LIVE YET", t["prompt"])
-        self.api("POST", "/api/tour", "newbie@test.example", {"done": "sandboxes"})
+        self.api("POST", "/api/tour", "newbie@test.example", {"done": "projects"})
         self.api("POST", "/api/tour", "newbie@test.example", {"done": "nonsense"})
         s, me = self.api("GET", "/api/me", "newbie@test.example")
-        self.assertEqual(me["tour"]["done"], ["sandboxes"], "progress remembered (unknown ids ignored)")
+        self.assertEqual(me["tour"]["done"], ["projects"], "progress remembered (unknown ids ignored)")
         self.api("POST", "/api/tour", "newbie@test.example", {"seen": True})
         self.assertFalse(self.api("GET", "/api/me", "newbie@test.example")[1]["first_visit"])
         js = open(os.path.join(ROOT, "static", "app.js"), encoding="utf8").read()
@@ -627,7 +629,7 @@ class TeamBoxTest(unittest.TestCase):
     def test_63_modules_coming_soon(self):
         s, j = self.api("GET", "/api/modules", A)
         st = {m["id"]: m["status"] for m in j["modules"]}
-        self.assertEqual(st, {"feed": "live", "team-feed": "live", "messages": "live"}, "feeds (tests/test_feeds.py) and messages (comms) are built")
+        self.assertEqual(st, {"feed": "live", "messages": "live"}, "home feed + messages are live; the weekly team feed is gone (2026-10-21)")
 
 
 if __name__ == "__main__":

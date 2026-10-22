@@ -11,16 +11,18 @@ DEFAULTS = {
     "port": 8740,
     "data_dir": "data",                      # relative to the app folder, or absolute (/var/lib/teambox on xOS)
     "public_url": "https://team.xseed.ing",
-    "admin_emails": [],                      # Marjus's email(s): admins can do everything
-    "member_emails": [],                     # optional allow-list on top of Cloudflare Access; empty = whoever Access lets in
-    "dev_mode": False,                       # local testing without Access: identity from X-Dev-Email header / dev_email cookie
+    "admin_emails": [],                      # optional extra admin account ids (normally: the admin account made by `teambox.auth admin-invite`)
+    "dev_mode": False,                       # local testing only: identity from X-Dev-Email header / dev_email cookie
     "trusted_proxy_ips": ["127.0.0.1", "::1"],
-    "access": {
+    "auth": {},                              # sign-in limits - defaults in teambox/auth.py DEFAULTS (invite_hours 48, idle_minutes 240, ...)
+    "access": {                              # OPTIONAL extra OUTER lock (off): Cloudflare Access in front of the app's own sign-in
+        "enabled": False,                    # true = every page/API request must also carry a Cloudflare Access login
         "team_domain": "",                   # e.g. xseed.cloudflareaccess.com  -> the Access JWT is verified when set
         "aud": "",                           # the Access application's AUD tag
-        "require_jwt": False,                # true = no valid Cf-Access-Jwt-Assertion, no identity
+        "require_jwt": False,                # true = no valid Cf-Access-Jwt-Assertion, no entry
         "certs_file": "",                    # tests only: a local JWKS file instead of fetching the certs
     },
+    "welcome": {"model": "", "template": "config/templates/lumi-welcome.txt", "fallback": "config/templates/lumi-welcome-fallback.txt"},
     "gateway": {
         "url": "http://127.0.0.1:11540",     # BESNIK's team gateway (LAN address on the real box)
         "secret_file": "",                   # path to the gateway secret on THIS box (never in the repo)
@@ -78,7 +80,6 @@ def load(path=None):
     dd = cfg["data_dir"]
     cfg["data_dir"] = dd if os.path.isabs(dd) else os.path.join(HERE, dd)
     cfg["admin_emails"] = [e.strip().lower() for e in cfg["admin_emails"] if e.strip()]
-    cfg["member_emails"] = [e.strip().lower() for e in cfg["member_emails"] if e.strip()]
     if cfg["dev_mode"] and os.environ.get("TEAMBOX_ALLOW_DEV") != "1":
         raise ConfigError("dev_mode is on in %s but TEAMBOX_ALLOW_DEV=1 is not set - refusing to start (dev mode lets anyone on this "
                           "machine pick an identity; never use it on the real team box)" % path)
