@@ -1,0 +1,8 @@
+# /etc/cloudflared/teambox.yml - the team box's OWN tunnel (not BESNIK's). Only team.xseed.ing, only to the local app.
+tunnel: REPLACE-TUNNEL-UUID
+credentials-file: /etc/cloudflared/REPLACE-TUNNEL-UUID.json
+ingress:
+  - hostname: team.xseed.ing
+    service: http://127.0.0.1:8740
+    # do NOT set originRequest.httpHostHeader; do NOT add any other service on this box
+  - service: http_status:404

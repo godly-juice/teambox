@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>How the team box works</title>
+<link rel="stylesheet" href="/static/app.css">
+<script src="/static/how.js" defer></script>
+</head>
+<body>
+<header class="top"><a class="brand" href="/">Team box</a><span class="who">How it works (public page)</span></header>
+<main class="page">
+<h1>How the team box works</h1>
+<div class="banner">TEAM SANDBOX - this is the team's shared workspace on the team computer. Not your computer, not Marjus's computer.</div>
+<p>This page explains, in plain words, what team.xseed.ing is, what it stores, who can see what, and how you can check each claim
+yourself. It is public on purpose, so that you - or an AI you trust - can read it before signing in.</p>
+
+<h2 id="what">What it is</h2>
+<p>The team box is a separate computer that belongs to the team (a PC with an RTX 3060, running xOS, a Linux system). It is not a
+member's computer and not the owner's work PC (BESNIK) or personal PC. It holds none of the owner's files or secrets. It reaches the
+owner's shared AI models only through one narrow, capped door on BESNIK: the <em>team gateway</em>, which only offers chat with
+shared models and start/stop within caps.</p>
+
+<h2 id="signin">Signing in</h2>
+<p>The address is protected by Cloudflare Access: you sign in with your email (a one-time code). The app trusts that email only when
+the request arrives through the team box's own Cloudflare tunnel, and (when switched on) after checking Cloudflare's signed login token.
+Admins are the owner's email address(es), set in the box's configuration; everyone else is a team member.</p>
+
+<h2 id="sandboxes">Sandboxes</h2>
+<p>Each member gets a private sandbox and can create more. A sandbox is a git repository on the team box that starts from a clean
+template: a README, guardrail files for AI tools, and a tiny example. It never contains a copy of anyone's own files or of BESNIK's code.
+<strong>Only you and the admins can see your sandboxes, builds, chats and settings versions</strong> - the server checks this on every
+request, for the web pages, the API and git. Asking for someone else's sandbox gets the same answer as asking for one that does not
+exist.</p>
+
+<h2 id="builds">AI builds</h2>
+<p>You describe a task; a shared model (through the team gateway, under your account's caps) works in your sandbox with a fixed set of
+tools: list, read, search, write, edit, run a test, list checkpoints, roll back, finish. Every accepted change is saved as a checkpoint
+(a git commit). One build per person at a time, and only a few on the whole box at once.</p>
+<p><strong>The jail.</strong> Every test - from the AI builder, from your pushes, or from "Run tests now" - runs inside bubblewrap on a
+throw-away copy of that one sandbox: no network at all, its own process space, a fake minimal /etc, no view of other sandboxes, the
+app, the box's data or any secret, a memory limit, a process limit, a file-size limit and a time limit. When the test ends, the copy
+is deleted.</p>
+<p><strong>The safety check (tripwire).</strong> If a test the AI builder wants to run contains a word that a test never needs (for
+example trying to switch namespaces, read other processes, reach the tunnel or the box's own data), it is not run. The AI is told the
+word, the line and why, and keeps working without it - the build never waits. An admin can "let it pass" for that exact file content.</p>
+
+<h2 id="models">Models &amp; settings versions</h2>
+<p>You can chat with the models the owner shares with the team, start or stop them if they are startable, and save your own settings
+(system prompt, temperature, top_p, answer length, how much history to keep) as named versions under your profile. The
+<em>Original</em> version (the model's own settings) is always kept and can always be chosen. The gateway may lower values over a
+model's limits, and when it refuses something (for example a start over your caps) you see its reason word for word.</p>
+
+<h2 id="byo">Bring your own AI tool</h2>
+<p>Every sandbox is also a git remote: <code>https://team.xseed.ing/git/&lt;your-id&gt;/&lt;sandbox&gt;.git</code>. You authenticate with
+a token you make on your profile page. It is shown once, stored only as a hash, and you can revoke it any time. A token reaches only
+its owner's sandboxes; admins can read every sandbox and cannot push to yours. Each sandbox contains CLAUDE.md, AGENTS.md, GEMINI.md,
+.cursorrules, .cursor/rules, .github/copilot-instructions.md and opencode.json. They tell AI tools that this is a team sandbox on a
+shared server, to stay inside the repository, never to probe or escape anything, and to refuse if asked. <strong>Those files are guidance
+only. A tool can ignore them. The protection is the server's jail, the token check and admin-only promote.</strong> Every push that changes
+your main branch runs your tests in the jail. The push is then listed under AI builds, where an admin can review it.</p>
+
+<h2 id="promote">Promote (admins only)</h2>
+<p>Only admins can promote a build into the shared team project. They review its changes (the exact diff a promote would add), its
+tests and its summary first. The server enforces this on every request, whatever the page shows. A member can reject their own builds
+only.</p>
+
+<h2 id="caps">Caps</h2>
+<p>The owner decides how much model memory and how many running models each account may use. The team gateway on BESNIK enforces
+this. The team box cannot change it.</p>
+
+<h2 id="team-feed">Team feed (every Tuesday 14:00) - not live yet</h2>
+<p>This is planned: every Tuesday at 2 pm, everyone's work and models from the week will become visible to the whole team, with comments
+and emoji reactions. Until it is live, builds stay visible only to their owner and the admins.</p>
+
+<h2 id="home">Home feed - not live yet</h2>
+<p>Planned: posts from the team with attachments (videos, pictures, notes, spreadsheets).</p>
+
+<h2 id="messages">Messages, calls, video calls and the monitoring notice - not live yet</h2>
+<p>Planned design: the content is encrypted at rest to the owner's AI's (Lumi's) key and can only be decrypted on BESNIK. Members read
+their own conversations. Monitoring is done by an AI first, and any concern is checked by a third-party AI before it reaches a human.
+Before first use you must accept this notice from the owner:</p>
+<blockquote class="card notice-text" id="notice"></blockquote>
+
+<h2 id="stored">What is stored today, and who can see it</h2>
+<ul>
+<li>Your profile (email, display name, language, tour progress), your sandboxes, builds and their transcripts, your chats with the AIs
+and your settings versions. All of this is on the team box's disk, under your member folder. You and the admins (and whoever operates
+the machine) can read it. It is <strong>not encrypted at rest yet</strong>.</li>
+<li>Your git tokens: only a hash of each one.</li>
+<li>On BESNIK, the team gateway logs usage numbers per account (model, tokens, seconds), not the text of your chats.</li>
+</ul>
+
+<h2 id="verify">Check it yourself</h2>
+<p>Each claim above comes with a test you can run. The text below lists them all. Paste it into an AI you trust and it will walk you
+through checking them. It also says honestly which claims can only be partly checked from outside.</p>
+<div class="card copybox"><div class="row"><strong>Text for your trusted AI</strong> <button id="copyPrompt" class="ghost small" type="button">Copy text</button></div>
+<textarea id="prompt" readonly aria-label="Verification prompt"></textarea></div>
+</main>
+</body>
+</html>

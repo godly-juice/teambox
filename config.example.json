@@ -1,0 +1,24 @@
+{
+  "bind": "127.0.0.1",
+  "port": 8740,
+  "data_dir": "/var/lib/teambox",
+  "public_url": "https://team.xseed.ing",
+  "admin_emails": ["REPLACE-with-marjus-email@example.com"],
+  "member_emails": [],
+  "dev_mode": false,
+  "trusted_proxy_ips": ["127.0.0.1", "::1"],
+  "access": {
+    "team_domain": "REPLACE.cloudflareaccess.com",
+    "aud": "REPLACE-with-the-Access-application-AUD-tag",
+    "require_jwt": true
+  },
+  "gateway": {
+    "url": "http://REPLACE-BESNIK-LAN-IP:11540",
+    "secret_file": "/etc/teambox/gateway.secret",
+    "timeout_s": 600
+  },
+  "builds": {"max_total": 2, "max_steps": 40, "max_minutes": 60, "max_tokens": 2500},
+  "jail": {"mode": "bwrap", "bwrap": "/usr/bin/bwrap", "prlimit": "/usr/bin/prlimit", "systemd_scope": false,
+           "memory_mb": 1024, "timeout_s": 120, "max_procs": 256, "max_file_mb": 50},
+  "limits": {"sandboxes_per_member": 10, "sandbox_max_mb": 200, "git_max_push_mb": 50, "chat_messages_max": 200, "tokens_per_member": 5}
+}
