@@ -87,12 +87,42 @@ sudo systemctl enable --now cloudflared-teambox.service
 left off, because the `teambox` system user has no user manager. Turning it on would need `loginctl enable-linger teambox` plus
 `XDG_RUNTIME_DIR`. This has not been tested.
 
+## 6b. Feeds: the home feed uploads and the Tuesday 14:00 team feed
+
+Config: `"feeds"` in `/etc/teambox/config.json` (all optional; defaults in `config.example.json`):
+- `timezone` (default `America/Chicago`), `publish_weekday` (0 = Monday, so 1 = Tuesday), `publish_time` (`"14:00"`). The time is
+  computed in that timezone whatever the box's system clock zone is, and follows daylight saving (14:00 CDT = 19:00 UTC, 14:00 CST = 20:00 UTC).
+  The box needs the tz database: `pacman -S --needed tzdata` (normally already installed).
+- `max_file_mb` (95) per file and `member_quota_mb` (1000) per member. Cloudflare refuses request bodies over 100 MB on the Free/Pro plans,
+  so do not raise `max_file_mb` above ~95 behind the tunnel. Uploads are streamed to disk, never held in memory.
+- Uploaded files live in `/var/lib/teambox/feed/files/` under random names (outside `/opt/teambox/static`), the team feed's read-only
+  copies in `/var/lib/teambox/team-feed/`. Both are covered by the normal backup of `/var/lib/teambox`. Watch the disk:
+  `du -sh /var/lib/teambox/feed`.
+
+**The publish runs inside the app** (`"scheduler": true`, the default): a thread checks every `tick_s` seconds and once at start-up,
+so if the box was off at 14:00 it publishes as soon as `teambox.service` is back (the week is marked "published late"). Each Tuesday is
+recorded in `/var/lib/teambox/team-feed/publishes.json` and published once, under a thread lock and a file lock.
+
+**Optional: also (or instead) a systemd timer.** Safe to run next to the in-app scheduler, because of the same lock and record:
+```sh
+sudo cp /opt/teambox/systemd/teambox-feed.service /opt/teambox/systemd/teambox-feed.timer /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now teambox-feed.timer
+systemctl list-timers teambox-feed.timer                  # next run: Tue 14:00 America/Chicago (+ a no-op check every 15 min)
+sudo systemctl start teambox-feed.service && journalctl -u teambox-feed -n 5   # {"published": null, "next": "..."} when nothing is due
+```
+If you change `feeds.timezone`/`publish_time`, change `OnCalendar=` in the timer too (or rely on the 15-minute check). To use only the
+timer, set `"scheduler": false`.
+
+Testing it without waiting for Tuesday: an admin opens Team feed → "Publish now" (labelled "Early publish" in the feed; the next Tuesday
+publishes only what is new). The test suite simulates the clock: `python3 -m unittest -v tests.test_feeds`.
+
 ## 7. Check from outside (after DNS moves)
 1. In a private window, open `https://team.xseed.ing`. You should get the Access email login, then the tour on first visit.
 2. Open `https://team.xseed.ing/how-it-works`. This is the public page.
 3. Sign in as a member and go to Your caps. You should see the gateway's numbers. If you see "could not be reached" instead, check the LAN, the BESNIK `allow_ips` and the secret.
 4. Profile → make a token, then `git clone https://team.xseed.ing/git/<id>/my-sandbox.git` (the password is the token), commit, and push. The build shows **tests pass**.
-5. Run the self-test on the box: `cd /opt/teambox && sudo -u teambox env PATH=/usr/bin python3 -m unittest tests.test_teambox`. It uses its own temporary folder and fake models, and switches dev mode on only inside its own test process.
+5. Home: post something with a picture and a csv; a teammate sees it, comments and reacts. Team feed: "Your work that goes out next time" lists your build.
+6. Run the self-test on the box: `cd /opt/teambox && sudo -u teambox env PATH=/usr/bin python3 -m unittest tests.test_teambox tests.test_feeds`. It uses its own temporary folder and fake models, and switches dev mode on only inside its own test process.
 
 ## Updating / backup
 - Code: `cd /opt/teambox && sudo git pull && sudo systemctl restart teambox`. When it restarts, any running build is marked "interrupted".

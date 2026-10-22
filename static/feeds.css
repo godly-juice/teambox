@@ -1,0 +1,26 @@
+/* Home feed + team feed. Uses the tokens from app.css. */
+.small { font-size: 13px; }
+.composer textarea { min-height: 80px; }
+.composer input[type=file] { padding: 6px; }
+.post .phead { gap: 10px; }
+.post .ptools { margin-left: auto; gap: 4px; }
+.ptext { white-space: pre-wrap; word-break: break-word; margin: 8px 0; }
+button.linkish { background: none; border: none; color: var(--accent); padding: 2px 6px; font-size: 14px; text-decoration: underline; }
+.att { margin: 10px 0; }
+.att img, .att video { display: block; max-width: 100%; max-height: 480px; border-radius: 8px; border: 1px solid var(--line); background: var(--code); }
+.attrow { margin-top: 6px; font-size: 14px; }
+.attrow .fname { word-break: break-all; }
+.btn.small { padding: 4px 10px; font-size: 14px; }
+pre.preview { max-height: 320px; }
+table.sheet td, table.sheet th { font-family: ui-monospace, monospace; font-size: 12px; white-space: pre-wrap; border: 1px solid var(--line); }
+.social { border-top: 1px solid var(--line); margin-top: 10px; padding-top: 8px; }
+.reactions { display: flex; flex-wrap: wrap; gap: 6px; }
+button.react { background: transparent; color: var(--text); border: 1px solid var(--line); border-radius: 99px; padding: 2px 10px; font-size: 16px; min-height: 34px; }
+button.react.mine { border-color: var(--accent); background: var(--code); }
+button.react .n { font-size: 13px; margin-left: 4px; color: var(--muted); }
+.comments { margin: 8px 0; }
+.comment { padding: 6px 0; border-bottom: 1px dashed var(--line); font-size: 14px; }
+.comment .ctext { white-space: pre-wrap; word-break: break-word; }
+.cform { flex-wrap: nowrap; }
+.cform input { flex: 1; }
+.weeks { margin: 12px 0; }

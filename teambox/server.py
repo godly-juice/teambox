@@ -148,7 +148,7 @@ class App:
 
     def tour_get(self, q):
         pr = self.store.profile(q.slug)
-        return 200, dict(tour.tour_payload(self.cfg["public_url"]), progress=pr.get("tour"))
+        return 200, dict(tour.tour_payload(self.cfg["public_url"], self.cfg.get("feeds")), progress=pr.get("tour"))
 
     def tour_save(self, q):
         pr = self.store.profile(q.slug)
@@ -479,7 +479,7 @@ class Handler(BaseHTTPRequestHandler):
             if path in ("/how-it-works", "/how-it-works.html"):        # public: the verification prompt points here
                 return self.static("how-it-works.html")
             if path == "/api/public/tour":
-                return self.send(200, tour.tour_payload(app.cfg["public_url"]))
+                return self.send(200, tour.tour_payload(app.cfg["public_url"], app.cfg.get("feeds")))
             if path == "/api/public/notice":
                 from .modules import messages as _msg
                 return self.send(200, {"notice": _msg.NOTICE, "sha256": _msg.NOTICE_SHA256})
@@ -510,6 +510,11 @@ class Handler(BaseHTTPRequestHandler):
             pr = app.store.ensure_profile(slug, email)
             app.sb.ensure_default(slug)
             admin = identity.is_admin(app.cfg, email)
+            raw = modules.raw_route(app, method, path)            # module uploads/downloads: body not read here (streamed)
+            if raw:
+                if method == "POST" and self.headers.get("X-Teambox") != "1":
+                    return self.send(403, {"error": "missing X-Teambox header (cross-site requests are refused)"})
+                return raw(self, Req(self, method, path, query, None, email, slug, admin))
             if not path.startswith("/api/"):
                 if method != "GET":
                     return self.send(405, {"error": "GET only"})
@@ -574,6 +579,7 @@ def main(argv=None):
     if "--port" in a:
         cfg["port"] = int(a[a.index("--port") + 1])
     app, srv = make_server(cfg)
+    modules.start(app)                                             # e.g. the Tuesday 14:00 team-feed scheduler
     ok, why = jail.available(cfg["jail"])
     app.log("team box listening on %s:%s (data %s, dev_mode %s, jail %s)" % (cfg["bind"], cfg["port"], cfg["data_dir"], cfg["dev_mode"], why or "ok"))
     print("team box on http://%s:%s  (jail: %s)" % (cfg["bind"], cfg["port"], why or "ok"), flush=True)

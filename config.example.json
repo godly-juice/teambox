@@ -20,5 +20,8 @@
   "builds": {"max_total": 2, "max_steps": 40, "max_minutes": 60, "max_tokens": 2500},
   "jail": {"mode": "bwrap", "bwrap": "/usr/bin/bwrap", "prlimit": "/usr/bin/prlimit", "systemd_scope": false,
            "memory_mb": 1024, "timeout_s": 120, "max_procs": 256, "max_file_mb": 50},
-  "limits": {"sandboxes_per_member": 10, "sandbox_max_mb": 200, "git_max_push_mb": 50, "chat_messages_max": 200, "tokens_per_member": 5}
+  "limits": {"sandboxes_per_member": 10, "sandbox_max_mb": 200, "git_max_push_mb": 50, "chat_messages_max": 200, "tokens_per_member": 5},
+  "feeds": {"timezone": "America/Chicago", "publish_weekday": 1, "publish_time": "14:00", "scheduler": true, "tick_s": 60,
+            "max_file_mb": 95, "member_quota_mb": 1000, "max_files_per_post": 10, "post_max_chars": 10000, "comment_max_chars": 4000,
+            "pending_hours": 24}
 }

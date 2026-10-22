@@ -1,0 +1,13 @@
+[Unit]
+Description=Team box - weekly team feed publish, every Tuesday 14:00 America/Chicago (catches up after the box was off)
+
+[Timer]
+# Keep this in step with config "feeds": {"timezone", "publish_weekday", "publish_time"}. The publish itself always uses the config.
+OnCalendar=Tue *-*-* 14:00:00 America/Chicago
+# Also every 15 minutes: a no-op unless a Tuesday was missed (the publish is recorded per week and done once).
+OnCalendar=*:0/15
+Persistent=true
+Unit=teambox-feed.service
+
+[Install]
+WantedBy=timers.target

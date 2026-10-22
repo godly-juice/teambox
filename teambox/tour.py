@@ -15,9 +15,11 @@ INTRO = ("team.xseed.ing is the TEAM BOX: a separate computer that belongs to th
 
 CHECKPOINTS = [
     {"id": "home", "title": "Home feed", "link": "#/m/feed",
-     "text": "The home page will carry the team's posts, with attachments (videos, pictures, notes, spreadsheets)."},
+     "text": "The home page carries the team's posts: write something and attach videos, pictures, notes, spreadsheets, PDFs or "
+             "documents. Everyone on the team sees them and can comment and react with an emoji. You can edit or delete your own posts."},
     {"id": "sandboxes", "title": "Sandboxes", "link": "#/sandboxes",
-     "text": "You get a sandbox of your own and can make more ('New sandbox'). Only you and the admins can see yours. Each one is a git "
+     "text": "You get a sandbox of your own and can make more ('New sandbox'). Only you and the admins can see yours (the Tuesday team "
+             "feed shows read-only copies of your work, never the sandbox itself). Each one is a git "
              "repository that starts from a clean template - never anyone's private files."},
     {"id": "builds", "title": "AI builds", "link": "#/builds",
      "text": "Describe a task and a shared AI model works in your sandbox: it reads, writes, tests, and saves a checkpoint after every "
@@ -29,7 +31,9 @@ CHECKPOINTS = [
      "text": "Each sandbox is a git remote. Make a token on your profile, clone it, point Claude Code / Codex / Cursor / OpenCode at it and "
              "push. Every push runs the sandbox's tests in the jail."},
     {"id": "team-feed", "title": "Team feed (Tuesdays 14:00)", "link": "#/m/team-feed",
-     "text": "Every Tuesday at 2 pm everyone's work and models of the week become visible to the whole team, with comments and emoji reactions."},
+     "text": "Every Tuesday at 2 pm (team box time) everyone's work and models of the week - builds, commits, new sandboxes, settings "
+             "versions - become visible to the whole team as read-only copies, with comments and emoji reactions. Until then your work "
+             "is visible only to you and the admins."},
     {"id": "messages", "title": "Messages & calls (monitoring notice)", "link": "#/m/messages",
      "text": "Messages, calls and video calls will live here. You must read and accept the team's monitoring notice before first use."},
     {"id": "caps", "title": "Your caps", "link": "#/caps",
@@ -41,7 +45,10 @@ CHECKPOINTS = [
 ]
 
 
-def verification_prompt(public_url):
+def verification_prompt(public_url, feeds=None):
+    """feeds = config "feeds" (timezone, upload caps), so the prompt quotes the box's real numbers."""
+    from .modules import feed as _feed, team_feed as _tf
+    feeds = {**_tf.DEFAULTS, **_feed.DEFAULTS, **(feeds or {})}
     live = {m["id"]: m["status"] == "live" for m in registry()}
     u = public_url.rstrip("/")
 
@@ -60,7 +67,9 @@ CLAIMS
    physically is can NOT be proven from outside.)
 2. Sign-in: Cloudflare Access email login; my identity on the site is that email. (Test: open the site in a private window - I should
    get an email login first; /api/me shows only my email and role.)
-3. Sandbox isolation: my sandboxes, builds, chats and saved settings are visible only to me and to the admins. (Test with a teammate:
+3. Sandbox isolation: my sandboxes, builds, chats and saved settings are visible only to me and to the admins - except that the weekly
+   team feed (claim 9) shows the team read-only COPIES of my finished builds, commits, new sandboxes' file lists and settings
+   versions after each Tuesday 14:00. Chats are never published. (Test with a teammate:
    each of us opens the other's sandbox address  %(u)s/#/sandbox/<their-id>/<name>  and calls  %(u)s/api/sandboxes/<their-id>/<name>
    - expected "no such sandbox"/403. Each tries to  git clone  the other's  %(u)s/git/<their-id>/<name>.git  with our own token -
    expected 403. Admins CAN see everything; that is stated, not hidden.)
@@ -79,8 +88,15 @@ CLAIMS
 8. Who can promote: only admins can promote work into the shared team project; this is checked by the server on every request.
    (Test: as a non-admin, send  POST %(u)s/api/builds/<my build id>/promote  with header  X-Teambox: 1  from the browser console -
    expected 403. Rejecting my OWN build works; rejecting someone else's gives 403.)
-9. Weekly team feed (every Tuesday 14:00 everyone's work becomes visible to the team, with comments and reactions): %(feed)s.
-   Until it is live, builds stay visible only to their owner and the admins.
+9. Weekly team feed: %(feed)s. Every Tuesday at 14:00 (team box time, %(tz)s) everything members made before that moment and not
+   yet published - finished builds, sandbox commits, new sandboxes, saved settings versions - becomes a READ-ONLY copy in the
+   Team feed that every member can see, comment on and react to. Before that, it is visible only to its owner and the admins.
+   Publishing never gives anyone access to another member's sandbox, builds or git remote. (Test with a teammate: make a build or
+   save a settings version, then before Tuesday 14:00 the teammate opens Team feed - it is not there, and  %(u)s/api/builds/<id>
+   gives "no such build". After Tuesday 14:00 it is in the Team feed with its diff, tests and summary, both of you can comment and
+   react, and  %(u)s/api/builds/<id>  plus  git clone  of your sandbox still give the teammate 404/403. "Your work that goes out
+   next time" on the Team feed page lists exactly what will be published. If the box was off at 14:00 it publishes as soon as it is
+   back, marked "published late". Admins can also "publish now"; such a publish is labelled "Early publish".)
 10. Messages, calls and video calls with a must-accept monitoring notice: %(msg)s. The announced design: content encrypted at rest to
    the owner's AI's (Lumi's) key, monitoring done by an AI first, and any concern verified by a third-party AI before a human sees it.
    Encryption at rest and who holds the key can only be PARTLY verified from outside (I can read the published notice and design, not
@@ -88,9 +104,22 @@ CLAIMS
 11. What is stored today: my chats with the AIs, my settings versions, my builds and their transcripts are stored on the team box under
    my member folder (readable by me and by the admins / the machine's operator; not encrypted at rest yet). The owner's gateway logs
    usage numbers per account (tokens, seconds), not the chat text - that part can not be verified from outside.
+   Home feed posts, their attachments, comments and reactions are visible to every signed-in team member and stored on the team box
+   (not encrypted at rest); deleting a post deletes its files.
+12. Home feed uploads: %(home)s. Allowed: pictures (png jpg gif webp), videos (mp4 mov webm), notes (txt md), spreadsheets (csv xlsx
+   ods xls), PDFs and documents (docx odt pptx doc rtf); a file whose content does not match its name (e.g. a web page renamed .png) is
+   refused. Caps: %(max_file)s MB per file and %(quota)s MB per member. Files are stored outside the website's folders under random
+   names. Only pictures and videos are shown inline; everything else downloads. HTML and SVG files can never open as a page on this
+   site. (Test: upload a .html file containing <script>alert(1)</script> and open its link - it downloads as
+   application/octet-stream with "Content-Disposition: attachment" and "X-Content-Type-Options: nosniff", nothing runs; check
+   the headers in the browser's developer tools (Network tab). Upload a .exe - refused. Upload a file over the cap - refused with
+   the cap in the message. A csv/xlsx shows a "Preview" of its first rows as plain text in a table; a .md shows as plain text, not
+   formatted.)
 
-Finish with a short table: claim, how I test it, what proves it, what I can NOT verify.""" % {"u": u, "feed": st("team-feed"), "msg": st("messages")}
+Finish with a short table: claim, how I test it, what proves it, what I can NOT verify.""" % {
+        "u": u, "feed": st("team-feed"), "msg": st("messages"), "home": st("feed"), "tz": feeds.get("timezone", "America/Chicago"),
+        "max_file": feeds.get("max_file_mb", 95), "quota": feeds.get("member_quota_mb", 1000)}
 
 
-def tour_payload(public_url):
-    return {"intro": INTRO, "checkpoints": CHECKPOINTS, "bottom_text": BOTTOM_TEXT, "prompt": verification_prompt(public_url)}
+def tour_payload(public_url, feeds=None):
+    return {"intro": INTRO, "checkpoints": CHECKPOINTS, "bottom_text": BOTTOM_TEXT, "prompt": verification_prompt(public_url, feeds)}
