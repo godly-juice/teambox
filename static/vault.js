@@ -152,7 +152,7 @@
       } }, h("h3", { text: "New note" }), h("label", { for: "noteTitle", text: "Title" }), title, h("label", { for: "noteText", text: "Note" }), text, h("div", { class: "row" }, h("button", { type: "submit" }, "Save note"))),
       h("form", { class: "card", onsubmit: async function (ev) {
         ev.preventDefault(); msg.textContent = "";
-        if (!fi.files[0]) return;
+        if (!fi.files[0]) return msg.appendChild(err("choose a file first"));
         try { await putFile(fi.files[0], function (r) { msg.textContent = "Encrypting and uploading " + Math.round(r * 100) + "%"; }); TB.views.vault(); }
         catch (e) { msg.textContent = ""; msg.appendChild(err(e)); }
       } }, h("h3", { text: "Add a file" }), h("label", { for: "vaultFile", text: "File (at most " + st.limits.file_max_mb + " MB)" }), fi, h("div", { class: "row" }, h("button", { type: "submit" }, "Encrypt and upload"))),
@@ -164,12 +164,13 @@
     var box = h("div", { class: "card" });
     try {
       var it = (await api("GET", "/api/vault/item?id=" + m.id)).item, o = await open(it.env), p = o.payload;
-      var del = h("button", { class: "linkish", type: "button", onclick: function () { if (confirm("Delete this from your vault?")) api("POST", "/api/vault/delete", { id: m.id }).then(function () { TB.views.vault(); }); } }, "delete");
+      var del = h("button", { class: "linkish", type: "button", onclick: function () { if (confirm("Delete this from your vault?")) api("POST", "/api/vault/delete", { id: m.id }).then(function () { TB.views.vault(); }).catch(function (e) { box.appendChild(err(e)); }); } }, "delete");
       if (p.t === "note") { box.appendChild(h("div", { class: "row" }, h("strong", { text: p.title || "(no title)" }), h("span", { class: "muted", text: m.updated }), del)); box.appendChild(h("pre", { class: "preview", text: p.text })); }
       else {
         box.appendChild(h("div", { class: "row" }, h("strong", { text: p.name }), h("span", { class: "muted", text: L().kb(p.size) + " - " + m.updated }),
           m.status === "ok" ? h("button", { class: "ghost small", type: "button", onclick: async function () {
-            var b = await getFile(m.id, o.ck, p.type), a = h("a", { href: URL.createObjectURL(b), download: p.name }); document.body.appendChild(a); a.click(); a.remove();
+            try { var b = await getFile(m.id, o.ck, p.type), a = h("a", { href: URL.createObjectURL(b), download: p.name }); document.body.appendChild(a); a.click(); a.remove(); }
+            catch (e) { box.appendChild(err(e)); }
           } }, "Download") : h("span", { class: "pill", text: m.status }), del));
       }
     } catch (e) { box.appendChild(err(e)); }

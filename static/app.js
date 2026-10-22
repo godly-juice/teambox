@@ -122,14 +122,15 @@
             h("div", { text: c.text }), h("a", { class: "muted", href: "/how-it-works#" + c.id, text: "Details" }))));
       });
       var ta = h("textarea", { readonly: true, "aria-label": "Verification prompt for your own AI" }); ta.value = t.prompt;
+      var tout = h("div");
       show(h("h1", { text: "What this site is" }), h("p", { text: t.intro }),
         h("div", { class: "progress", "aria-label": done.length + " of " + t.checkpoints.length + " checkpoints visited" }, bar),
         h("p", { class: "muted", text: done.length + " of " + t.checkpoints.length + " checkpoints visited - click each to see that area." }),
         list,
         h("p", { class: "bottom-text", id: "tour-bottom-text", text: t.bottom_text }),
         h("div", { class: "copybox card" }, h("div", { class: "row" }, h("strong", { text: "Text for your trusted AI" }), copyBtn(function () { return t.prompt; }, "Copy text")), ta),
-        h("div", { class: "row" }, h("button", { onclick: function () { api("POST", "/api/tour", { seen: true }).then(function () { location.hash = "#/"; }); } }, "Got it - go to Home"),
-          h("button", { class: "ghost", onclick: function () { api("POST", "/api/tour", { reset: true }).then(vTour); } }, "Reset progress")));
+        h("div", { class: "row" }, h("button", { onclick: function () { api("POST", "/api/tour", { seen: true }).then(function () { location.hash = "#/"; }).catch(function (e) { tout.textContent = ""; tout.appendChild(err(e)); }); } }, "Got it - go to Home"),
+          h("button", { class: "ghost", onclick: function () { api("POST", "/api/tour", { reset: true }).then(vTour).catch(function (e) { tout.textContent = ""; tout.appendChild(err(e)); }); } }, "Reset progress")), tout);
       api("POST", "/api/tour", { seen: true });
     }).catch(function (e) { show(err(e)); });
   }
@@ -207,13 +208,15 @@
     }).catch(function (e) { show(err(e)); });
   }
 
-  var pollT = null;
+  var pollT = null, stopAsked = {};
   function vBuild(id) {
     clearTimeout(pollT);
     api("GET", "/api/builds/" + id).then(function (b) {
       var out = h("div");
       var actions = h("div", { class: "row" });
-      if (b.status === "running" && (b.owner === TB.me.id || TB.me.admin)) actions.appendChild(h("button", { class: "ghost", onclick: function () { api("POST", "/api/builds/" + id + "/stop", {}).then(function () { vBuild(id); }); } }, "Stop"));
+      // Stop takes effect between steps (the answer the model is writing now is awaited first), so say so instead of looking dead
+      if (b.status === "running" && (b.owner === TB.me.id || TB.me.admin)) actions.appendChild(stopAsked[id] ? h("button", { class: "ghost", disabled: true }, "Stopping after the current step...") :
+        h("button", { class: "ghost", onclick: function () { api("POST", "/api/builds/" + id + "/stop", {}).then(function () { stopAsked[id] = true; vBuild(id); }).catch(function (e) { out.textContent = ""; out.appendChild(err(e)); }); } }, "Stop"));
       if (b.kind === "ai" && b.owner === TB.me.id && !b.applied && /waiting|nothing|rejected|promoted/.test(b.status)) actions.appendChild(h("button", { class: "ghost", onclick: function () {
         api("POST", "/api/builds/" + id + "/apply", {}).then(function () { vBuild(id); }).catch(function (e) { out.textContent = ""; out.appendChild(err(e)); }); } }, "Apply to my project"));
       if (b.can_reject) actions.appendChild(h("button", { class: "ghost", onclick: function () {
@@ -221,11 +224,13 @@
         api("POST", "/api/builds/" + id + "/reject", {}).then(function () { vBuild(id); }).catch(function (e) { out.textContent = ""; out.appendChild(err(e)); }); } }, "Reject"));
       if (b.owner === TB.me.id && !/running|testing|queued/.test(b.status) && TB.shareButton) actions.appendChild(TB.shareButton({ kind: "build", build: id }, "build:" + id));
       if (b.can_promote) actions.appendChild(h("button", { onclick: function () {
-        if (!confirm("Promote " + (b.files || []).length + " file(s) into the shared team project?\n\n" + (b.files || []).map(function (f) { return f.status + " " + f.path; }).join("\n") + "\n\nFlags: " + ((b.flags || []).join("; ") || "none"))) return;
+        var tp = (b.tripwire_pending || []).map(function (t) { return t.file + " line " + t.line + " ('" + t.word + "')"; });
+        if (!confirm("Promote " + (b.files || []).length + " file(s) into the shared team project?\n\n" + (b.files || []).map(function (f) { return f.status + " " + f.path; }).join("\n") + "\n\nFlags: " + ((b.flags || []).join("; ") || "none") +
+          (tp.length ? "\n\nWARNING - the safety check blocked these tests (they did NOT run): " + tp.join("; ") : ""))) return;
         api("POST", "/api/builds/" + id + "/promote", { confirm: true, head: b.head }).then(function () { vBuild(id); }).catch(function (e) { out.textContent = ""; out.appendChild(err(e)); }); } }, "Promote (admin)"));
       var trips = (b.tripwire_pending || []).map(function (t) {
         return h("div", { class: "err" }, "Safety check blocked a test: " + t.file + " line " + t.line + " contains '" + t.word + "' (" + t.why + "): " + t.text,
-          TB.me.admin && t.sha ? h("div", {}, h("button", { class: "small", onclick: function () { api("POST", "/api/tripwire/" + t.sha + "/letpass", {}).then(function () { vBuild(id); }); } }, "Let it pass (this exact file)")) : h("div", { class: "muted", text: "The build kept going without it; an admin can let this exact file pass." }));
+          TB.me.admin && t.sha ? h("div", {}, h("button", { class: "small", onclick: function () { api("POST", "/api/tripwire/" + t.sha + "/letpass", {}).then(function () { vBuild(id); }).catch(function (e) { out.textContent = ""; out.appendChild(err(e)); }); } }, "Let it pass (this exact file)")) : h("div", { class: "muted", text: "The build kept going without it; an admin can let this exact file pass." }));
       });
       show(banner(), h("h1", { text: b.title }),
         h("div", { class: "row" }, statusPill(b.status), b.verdict ? statusPill(b.verdict) : null, pill(b.kind === "push" ? "push from own AI tool" : "AI build: " + (b.model || "")), pill((b.owner_email || b.owner) + " / " + b.sandbox)),
@@ -325,7 +330,7 @@
         h("p", { class: "muted", text: "'Original' is the model's own settings and is always kept - you can always go back to it. Your versions are saved under your profile. The team gateway may lower values that are over this model's limits (it tells you)." }),
         h("div", { class: "tbl" }, h("table", {}, v.versions.map(function (x) {
           return h("tr", {}, h("td", {}, h("strong", { text: x.name })), h("td", {}, h("code", { text: JSON.stringify(x.settings) })), h("td", { text: x.created || x.note || "" }),
-            h("td", {}, x.original ? pill("always kept") : h("button", { class: "ghost small", onclick: function () { api("POST", "/api/versions/delete", { model: model, id: x.id }).then(function () { vVersions(model); }); } }, "Delete")),
+            h("td", {}, x.original ? pill("always kept") : h("button", { class: "ghost small", onclick: function () { api("POST", "/api/versions/delete", { model: model, id: x.id }).then(function () { vVersions(model); }).catch(function (e) { out.textContent = ""; out.appendChild(err(e)); }); } }, "Delete")),
             h("td", {}, h("button", { class: "small", onclick: function () { newChat(model, x.id); } }, "Chat with it")),
             h("td", {}, x.original || !TB.shareButton ? null : TB.shareButton({ kind: "version", model: model, version: x.id }, "version:" + TB.me.id + ":" + model + ":" + x.id)));
         }))),
@@ -355,7 +360,7 @@
         h("h2", { text: "Your git tokens" }),
         t.tokens.length ? h("div", { class: "tbl" }, h("table", {}, h("tr", {}, h("th", { text: "Label" }), h("th", { text: "Created" }), h("th", { text: "Last used" }), h("th", { text: "" })),
           t.tokens.map(function (k) { return h("tr", {}, h("td", { text: k.label }), h("td", { text: k.created }), h("td", { text: k.last_used || "never" }),
-            h("td", {}, h("button", { class: "danger small", onclick: function () { if (confirm("Revoke '" + k.label + "'? Anything using it stops working.")) api("POST", "/api/tokens/" + k.id + "/revoke", {}).then(vByo); } }, "Revoke"))); }))) : h("p", { class: "muted", text: "No tokens yet." }),
+            h("td", {}, h("button", { class: "danger small", onclick: function () { if (confirm("Revoke '" + k.label + "'? Anything using it stops working.")) api("POST", "/api/tokens/" + k.id + "/revoke", {}).then(vByo).catch(function (e) { out.textContent = ""; out.appendChild(err(e)); }); } }, "Revoke"))); }))) : h("p", { class: "muted", text: "No tokens yet." }),
         h("div", { class: "card" }, h("label", { for: "tokLabel", text: "New token label" }), label, h("div", { class: "row" }, h("button", { onclick: function () {
           api("POST", "/api/tokens", { label: label.value }).then(function (r) {
             out.textContent = ""; var pre = h("pre", { id: "newToken", text: r.token });
@@ -495,7 +500,7 @@
         h("div", { class: "tbl" }, h("table", {}, h("tr", {}, ["Name", "Account", "Status", "Expires", "Purpose", ""].map(function (t) { return h("th", { text: t }); })),
           r[0].invites.map(function (i) { return h("tr", {}, h("td", { text: i.name }), h("td", { text: i.account }), h("td", {}, pill(i.status, i.status === "used" ? "ok" : /locked|revoked|expired/.test(i.status) ? "bad" : "")),
             h("td", { text: i.expires }), h("td", { text: i.purpose }),
-            h("td", {}, /pending|redeemed/.test(i.status) ? h("button", { class: "danger small", onclick: function () { api("POST", "/api/admin/invites/" + i.id + "/revoke", {}).then(vInvites); } }, "Revoke") : null)); }))),
+            h("td", {}, /pending|redeemed/.test(i.status) ? h("button", { class: "danger small", onclick: function () { api("POST", "/api/admin/invites/" + i.id + "/revoke", {}).then(vInvites).catch(function (e) { out.textContent = ""; out.appendChild(err(e)); }); } }, "Revoke") : null)); }))),
         h("h2", { text: "Accounts" }),
         h("div", { class: "tbl" }, h("table", {}, h("tr", {}, ["Account", "Sign-in name", "Role", "Status", "Sessions", ""].map(function (t) { return h("th", { text: t }); })),
           r[1].accounts.map(function (a) {
