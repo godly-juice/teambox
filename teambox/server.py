@@ -24,7 +24,7 @@ STATIC = os.path.join(C.HERE, "static")
 MIME = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
         ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon", ".json": "application/json", ".txt": "text/plain; charset=utf-8"}
 SEC_HEADERS = [("X-Content-Type-Options", "nosniff"), ("X-Frame-Options", "DENY"), ("Referrer-Policy", "no-referrer"),
-               ("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; "
+               ("Content-Security-Policy", "default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self'; script-src 'self'; "
                                            "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"),
                ("Cache-Control", "no-store")]
 SETTING_KEYS = ("system_prompt", "temperature", "top_p", "max_tokens", "ctx")
@@ -476,6 +476,9 @@ class Handler(BaseHTTPRequestHandler):
                 return githttp.handle(app, self, method, path, query)
             if path == "/healthz":
                 return self.send(200, {"ok": True})
+            if path.startswith("/export/"):                            # BESNIK's review script: bearer export token, ciphertext only
+                from .modules import messages as _msg
+                return _msg.export_http(app, self, method, path, query)
             if path in ("/how-it-works", "/how-it-works.html"):        # public: the verification prompt points here
                 return self.static("how-it-works.html")
             if path == "/api/public/tour":

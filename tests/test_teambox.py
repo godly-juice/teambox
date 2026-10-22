@@ -623,7 +623,7 @@ class TeamBoxTest(unittest.TestCase):
 
     def test_63_modules_coming_soon(self):
         s, j = self.api("GET", "/api/modules", A)
-        self.assertEqual({m["id"]: m["status"] for m in j["modules"]}, {"feed": "coming soon", "team-feed": "coming soon", "messages": "coming soon"})
+        self.assertEqual({m["id"]: m["status"] for m in j["modules"]}, {"feed": "coming soon", "team-feed": "coming soon", "messages": "live"})
 
 
 if __name__ == "__main__":

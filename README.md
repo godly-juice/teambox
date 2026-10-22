@@ -14,6 +14,7 @@ Python 3 standard library + git + bubblewrap. Install: see `INSTALL-XOS.md`.
 | `teambox/githttp.py` | git smart HTTP (`git http-backend`) with per-member hashed tokens |
 | `teambox/gateway.py` | client for BESNIK's team gateway (X-Team-Secret / X-Team-Account) |
 | `teambox/tour.py` | onboarding tour, the exact bottom text, the verification prompt |
+| `teambox/comms.py` + `modules/messages.py` | **Messages & calls (live)**: the notice gate, members' public keys, encrypted threads/attachments, call signalling, Lumi-only call recordings, the `/export/comms` door for BESNIK. The server stores ciphertext only. `static/comms.js` does all the crypto in the browser (WebCrypto). |
 | `teambox/modules/` | **extension slots**: `feed.py` (home feed), `team_feed.py` (Tuesday 14:00), `messages.py` (messages/calls + Marjus's notice). See `modules/__init__.py` for the contract. |
 | `static/` | UI (plain JS, phone-friendly, light/dark), `how-it-works.html` (public) |
 | `starter/` | what every new sandbox starts as (README, guardrail files, example) |

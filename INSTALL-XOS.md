@@ -94,6 +94,69 @@ left off, because the `teambox` system user has no user manager. Turning it on w
 4. Profile → make a token, then `git clone https://team.xseed.ing/git/<id>/my-sandbox.git` (the password is the token), commit, and push. The build shows **tests pass**.
 5. Run the self-test on the box: `cd /opt/teambox && sudo -u teambox env PATH=/usr/bin python3 -m unittest tests.test_teambox`. It uses its own temporary folder and fake models, and switches dev mode on only inside its own test process.
 
+## 8. Messages & calls (Lumi's key, the export door, TURN)
+
+Messages and calls stay switched off (the page says why) until the box has **Lumi's public key**.
+
+**a. Lumi's key - on BESNIK, once (Director):**
+```bat
+python D:\Atlas\app\lumi_comms_key.py
+```
+It writes `D:\Atlas\memory\lumi-comms\` (ACL: the normal user only) with `lumi-comms-private.pem` (never leaves BESNIK) and
+`export.token` (never leaves BESNIK). It prints only the public key, its fingerprint (kid) and the export token's sha256, plus a
+`"comms": {...}` block. It refuses to run a second time, because a new key would make every stored message unreadable for Lumi.
+Back the folder up offline (USB stick in a drawer): if the private key is lost, Lumi can never read the old messages again.
+
+**b. The box's config:** paste the printed `lumi_public_key`, `lumi_kid` and `export_token_sha256` into `comms` in
+`/etc/teambox/config.json`, then `sudo systemctl restart teambox`. Publish the fingerprint to the team (for example in the Tuesday
+feed): every member's Messages page shows "Lumi's key: xxxx xxxx xxxx xxxx", and the browser warns if it ever changes.
+
+**c. The export door (BESNIK pulls ciphertext):** the review script calls `https://team.xseed.ing/export/comms` with
+`Authorization: Bearer <export token>`. The box keeps only the token's sha256 and hands out ciphertext + Lumi's wrapped key +
+metadata, nothing it could read. In Cloudflare Access, add an application for `team.xseed.ing/export` with a **Service Auth** policy
+and create a **service token**. Put its id/secret on BESNIK in `D:\Atlas\memory\lumi-comms\cf-access.json`:
+`{"client_id": "...", "client_secret": "..."}`. Then run a dry check:
+```bat
+python D:\Atlas\app\lumi_comms_review.py --box https://team.xseed.ing --ai1 fake-strict --ai2 fake-careful --once --inbox %TEMP%\dry-concerns.jsonl
+```
+That review is a **stub**: the fake AIs are keyword rules, real models are not wired in (and call recordings are not transcribed yet).
+Agreed concerns go to `D:\Atlas\portal\data\watchdog-concerns.jsonl`, a new file. The live portal does not show it yet.
+
+**d. TURN (calls across different networks):** calls are browser to browser. Two members on different home networks or mobile data
+usually need a relay. Install coturn on the box, or on any small public VPS (the media stays DTLS-SRTP encrypted end to end; TURN only
+relays packets it can not read):
+```sh
+sudo pacman -S --needed coturn
+head -c 32 /dev/urandom | base64 | sudo install -o root -g teambox -m 0640 /dev/stdin /etc/teambox/turn.secret
+sudo cp /etc/teambox/turn.secret /etc/turnserver/turn.secret     # coturn reads it too
+sudo tee /etc/turnserver/turnserver.conf >/dev/null <<'EOF'
+listening-port=3478
+tls-listening-port=5349
+fingerprint
+use-auth-secret
+static-auth-secret=PASTE-THE-SAME-SECRET
+realm=turn.xseed.ing
+total-quota=50
+no-cli
+no-multicast-peers
+denied-peer-ip=10.0.0.0-10.255.255.255
+denied-peer-ip=172.16.0.0-172.31.255.255
+denied-peer-ip=192.168.0.0-192.168.255.255
+cert=/etc/letsencrypt/live/turn.xseed.ing/fullchain.pem
+pkey=/etc/letsencrypt/live/turn.xseed.ing/privkey.pem
+EOF
+sudo systemctl enable --now turnserver
+```
+TURN can not go through the Cloudflare tunnel (it is UDP/TCP media, not HTTP). It needs its own public address: forward UDP+TCP 3478,
+TCP 5349 and the relay range (UDP 49152-65535) on the router, or use a VPS. Then set `comms.ice_servers` (STUN) and `comms.turn.urls` in the config.
+The box hands each member short-lived TURN credentials (`comms.turn.ttl_s`, coturn's `use-auth-secret` scheme), never the secret.
+The `denied-peer-ip` lines stop the relay from being used to reach the LAN (and so BESNIK). Without TURN, calls work only when both
+browsers can reach each other directly (same LAN, most home routers with STUN).
+
+**e. Limits that stay:** calls are a mesh, so 4 people at most (`comms.max_call`). Bigger group calls need an SFU (e.g. LiveKit or
+mediasoup) - not built. The recording is made by the caller's browser: a modified browser could skip it. Everyone in the call then sees
+"no recording has reached the team box yet", and the admin page lists the call as "NO recording received".
+
 ## Updating / backup
 - Code: `cd /opt/teambox && sudo git pull && sudo systemctl restart teambox`. When it restarts, any running build is marked "interrupted".
 - Data: everything is under `/var/lib/teambox` (members, sandboxes, builds, team-main, tokens-index). Back it up as one folder.
