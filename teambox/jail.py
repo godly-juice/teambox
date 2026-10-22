@@ -72,6 +72,21 @@ def copy_tree(src, dst, max_bytes):
     return total
 
 
+def _base_dirs():
+    """/bin, /sbin, /lib, /lib64 as the host has them. Merged-/usr systems (Arch) have symlinks -> recreate the symlinks.
+    xOS (Alpine) has REAL directories (the musl loader /lib/ld-musl-*.so.1 and busybox /bin/sh live there) -> bind them read-only,
+    otherwise no program in /usr/bin can start inside the jail ('execvp python3: No such file or directory')."""
+    out = []
+    for d, target in (("/bin", "usr/bin"), ("/sbin", "usr/bin"), ("/lib", "usr/lib"), ("/lib64", "usr/lib")):
+        if os.path.islink(d):
+            out += ["--symlink", os.readlink(d), d]
+        elif os.path.isdir(d):
+            out += ["--ro-bind", d, d]
+        else:
+            out += ["--symlink", target, d]
+    return out
+
+
 def command(jcfg, work, etc, argv):
     mem = int(jcfg["memory_mb"]) * 2 ** 20
     lim = [jcfg["prlimit"], "--as=%d" % mem, "--nproc=%d" % int(jcfg["max_procs"]), "--fsize=%d" % (int(jcfg["max_file_mb"]) * 2 ** 20),
@@ -79,7 +94,7 @@ def command(jcfg, work, etc, argv):
     bw = [jcfg["bwrap"], "--unshare-all", "--die-with-parent", "--new-session", "--cap-drop", "ALL",
           "--hostname", "team-sandbox-jail",
           "--ro-bind", "/usr", "/usr",
-          "--symlink", "usr/bin", "/bin", "--symlink", "usr/bin", "/sbin", "--symlink", "usr/lib", "/lib", "--symlink", "usr/lib", "/lib64",
+          *_base_dirs(),
           "--ro-bind", etc, "/etc",
           "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp", "--tmpfs", "/run",
           "--bind", work, "/work", "--chdir", "/work",
