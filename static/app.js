@@ -101,8 +101,9 @@
         tile("AI builds", "Let a shared AI build something in a sandbox.", "#/builds"),
         tile("Models & chat", "Chat, start/stop models, save your own settings versions.", "#/models"),
         tile("Your own AI tool", "Connect Claude Code, Codex, Cursor or OpenCode.", "#/byo")),
-      h("div", { class: "card" }, h("h3", { text: "Home feed" }), h("p", { class: "muted", text: "Posts with attachments (videos, pictures, notes, spreadsheets) - coming soon." })),
-      TB.me.dev_mode ? h("div", { class: "err", text: "DEV MODE is on: identity comes from a test header/cookie, not Cloudflare Access. Never on the real box." }) : null);
+      TB.me.dev_mode ? h("div", { class: "err", text: "DEV MODE is on: identity comes from a test header/cookie, not Cloudflare Access. Never on the real box." }) : null,
+      h("div", { id: "home-feed" }, h("p", { class: "muted", text: "Loading the home feed..." })));
+    if (TB.homeFeed) TB.homeFeed(document.getElementById("home-feed"));     // static/feeds.js
   }
   function tile(t, d, href) { return h("a", { class: "card", href: href }, h("h3", { text: t }), h("p", { class: "muted", text: d })); }
 

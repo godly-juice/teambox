@@ -32,7 +32,8 @@ Admins are the owner's email address(es), set in the box's configuration; everyo
 template: a README, guardrail files for AI tools, and a tiny example. It never contains a copy of anyone's own files or of BESNIK's code.
 <strong>Only you and the admins can see your sandboxes, builds, chats and settings versions</strong> - the server checks this on every
 request, for the web pages, the API and git. Asking for someone else's sandbox gets the same answer as asking for one that does not
-exist.</p>
+exist. The one exception is the weekly <a href="#team-feed">team feed</a>: every Tuesday at 14:00 it shows the team read-only
+copies of what you made (never your chats, never access to the sandbox itself).</p>
 
 <h2 id="builds">AI builds</h2>
 <p>You describe a task; a shared model (through the team gateway, under your account's caps) works in your sandbox with a fixed set of
@@ -70,12 +71,38 @@ only.</p>
 <p>The owner decides how much model memory and how many running models each account may use. The team gateway on BESNIK enforces
 this. The team box cannot change it.</p>
 
-<h2 id="team-feed">Team feed (every Tuesday 14:00) - not live yet</h2>
-<p>This is planned: every Tuesday at 2 pm, everyone's work and models from the week will become visible to the whole team, with comments
-and emoji reactions. Until it is live, builds stay visible only to their owner and the admins.</p>
+<h2 id="team-feed">Team feed (every Tuesday 14:00)</h2>
+<p>Every Tuesday at 2 pm, team box time (America/Chicago unless the box's configuration says otherwise), everything members made
+before that moment and not yet published becomes visible to the whole team in <em>Team feed</em>:</p>
+<ul>
+<li>finished builds (AI builds and pushes from your own AI tool): the task, the summary, the changed files, the diff and the test results;</li>
+<li>commits on your sandboxes' main branch (the list and the changes);</li>
+<li>new sandboxes you made (their file list; your automatic "my-sandbox" is not announced);</li>
+<li>the settings versions you saved for a model (name and settings, including the system prompt).</li>
+</ul>
+<p>Everyone on the team can comment on each item and react with an emoji. <strong>Before the Tuesday publish, your work is visible only
+to you and the admins</strong>, exactly as described above. A build that is still running waits for the next Tuesday. What is published is
+a <strong>read-only copy made at 14:00</strong> and kept by the team feed. It does not give anyone access to your sandbox, your builds
+page or your git remote: those still answer "no such ..." / 403 to everyone but you and the admins. Your chats are never published.
+The Team feed page lists "your work that goes out next time", so you can see in advance exactly what will be shown.</p>
+<p>The publish runs inside the app (checked every minute). If the team box was off at 14:00 it publishes as soon as it is back, and
+that week is marked "published late". Each Tuesday is recorded and published once, even if the check runs twice. Admins can "publish
+now" for testing; that is shown as an "Early publish", and the next Tuesday then publishes only what is new.</p>
 
-<h2 id="home">Home feed - not live yet</h2>
-<p>Planned: posts from the team with attachments (videos, pictures, notes, spreadsheets).</p>
+<h2 id="home">Home feed</h2>
+<p>The home page has the team's feed: anyone can post text and attach files. Everyone on the team sees the home feed and can comment
+and react with an emoji. You can edit and delete your own posts; admins can delete any post. Deleting a post deletes its files.</p>
+<ul>
+<li><strong>Allowed files:</strong> pictures (png, jpg, gif, webp), videos (mp4, mov, webm), notes (txt, md), spreadsheets (csv, xlsx,
+ods, xls), PDFs and documents (docx, odt, pptx, doc, rtf). Other types are refused. The start of the file must match its type: a web
+page renamed to .png is refused.</li>
+<li><strong>Size caps</strong> (set in the box's configuration; defaults): 95 MB per file (Cloudflare refuses bigger uploads) and 1000 MB in total per member.</li>
+<li><strong>Storage:</strong> files are kept outside the website's folders under random names, never the name you gave them.</li>
+<li><strong>Showing them:</strong> only pictures and videos are shown inline. Everything else is a download. Notes and spreadsheets get a
+"Preview": the text, or the first rows of the sheet as a table of plain text - nothing in them is run or formatted. HTML and SVG files
+are accepted only as downloads (<code>application/octet-stream</code>, <code>Content-Disposition: attachment</code>): they can never open
+as a page on this site. Every file is sent with <code>X-Content-Type-Options: nosniff</code> and a sandboxing Content-Security-Policy.</li>
+</ul>
 
 <h2 id="messages">Messages, calls, video calls and the monitoring notice - not live yet</h2>
 <p>Planned design: the content is encrypted at rest to the owner's AI's (Lumi's) key and can only be decrypted on BESNIK. Members read
@@ -88,6 +115,8 @@ Before first use you must accept this notice from the owner:</p>
 <li>Your profile (email, display name, language, tour progress), your sandboxes, builds and their transcripts, your chats with the AIs
 and your settings versions. All of this is on the team box's disk, under your member folder. You and the admins (and whoever operates
 the machine) can read it. It is <strong>not encrypted at rest yet</strong>.</li>
+<li>Home feed posts, their files, comments and reactions (visible to every team member), and the team feed's read-only copies of
+published work. Also not encrypted at rest.</li>
 <li>Your git tokens: only a hash of each one.</li>
 <li>On BESNIK, the team gateway logs usage numbers per account (model, tokens, seconds), not the text of your chats.</li>
 </ul>

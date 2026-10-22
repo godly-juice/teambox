@@ -1,0 +1,16 @@
+[Unit]
+Description=Team box - weekly team feed publish (Tuesday 14:00; idempotent, safe next to the in-app scheduler)
+After=teambox.service
+
+[Service]
+Type=oneshot
+User=teambox
+Group=teambox
+ExecStart=/usr/bin/python3 -m teambox.modules.team_feed --config /etc/teambox/config.json
+WorkingDirectory=/opt/teambox
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/teambox
+PrivateTmp=yes
+UMask=0077
