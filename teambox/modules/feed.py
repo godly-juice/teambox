@@ -11,7 +11,10 @@ Layout under data_dir:
   feed/posts/<id>.json       {id, author, author_email, text, created, edited, attachments: [file ids], comments, reactions}
   feed/files/<32 hex>        the bytes, random name, no extension, outside the web root (static/)
   feed/files.json            {file id: {owner, name, ext, kind, size, created, post}}
-  feed/previews/<id>.json    text / table preview (strings only), made once at upload time"""
+  feed/previews/<id>.json    text / table preview (strings only), made once at upload time
+  feed/shared/<post id>.json the read-only copy behind a "Share to feed" post (teambox/share.py makes it; Unshare deletes it)
+Share to feed:  POST /api/m/feed/share {kind: project|build|version, project | build | model+version, text?}   (owner only)
+                POST /api/m/feed/unshare {key}      GET /api/m/feed/shares (what I shared)      GET /api/m/feed/shared?post=<id>"""
 import os
 import re
 import secrets
@@ -28,7 +31,8 @@ MODULE = {
     "status": "live",
     "summary": "Posts from the team with attachments: videos, pictures, notes, spreadsheets, PDFs and documents.",
     "help": "Anyone on the team can post here and attach files (videos, pictures, notes, spreadsheets, PDFs, documents). Everyone on the "
-            "team sees the home feed. You can edit or delete your own posts; admins can delete any post.",
+            "team sees the home feed. You can edit or delete your own posts; admins can delete any post. Your projects, builds and "
+            "settings versions appear here only if YOU press 'Share to feed' on one of them (a read-only copy; 'Unshare' removes it).",
 }
 
 DEFAULTS = {"max_file_mb": 95, "member_quota_mb": 1000, "max_files_per_post": 10, "post_max_chars": 10000, "comment_max_chars": 4000,
@@ -53,7 +57,7 @@ class Feed:
     def __init__(self, app):
         self.app, self.store = app, app.store
         self.dir = app.store.p("feed")
-        for d in ("posts", "files", "previews"):
+        for d in ("posts", "files", "previews", "shared"):
             os.makedirs(os.path.join(self.dir, d), exist_ok=True)
         self.index_f = os.path.join(self.dir, "files.json")
 
@@ -121,8 +125,86 @@ class Feed:
         v = {"id": p["id"], "author": p["author"], "author_name": self.name(p["author"]), "text": p["text"], "created": p["created"],
              "edited": p.get("edited"), "attachments": [self.att_view(f, idx[f]) for f in p.get("attachments", []) if f in idx],
              "can_edit": p["author"] == q.slug, "can_delete": p["author"] == q.slug or q.admin}
+        if p.get("shared"):
+            sh = p["shared"]
+            v["shared"] = {"kind": sh["kind"], "key": sh["key"], "title": sh["title"], "shared_at": sh.get("at"),
+                           "summary": sh.get("summary") or {}, "read_only": True}
         v.update(social.public_view(p, q.slug, self.name))
         return v
+
+    # ------------------------------------------------------------ SHARE TO FEED (a read-only copy of a project, build or version)
+    def shared_path(self, pid):
+        return os.path.join(self.dir, "shared", pid + ".json")
+
+    def my_shares(self, slug):
+        out = {}
+        for n in os.listdir(os.path.join(self.dir, "posts")):
+            p = S.jread(os.path.join(self.dir, "posts", n))
+            if p and p.get("shared") and p["author"] == slug:
+                out[p["shared"]["key"]] = p["id"]
+        return out
+
+    def share(self, q):
+        from .. import share as SH
+        try:
+            key, data = SH.snapshot(self.app, q.slug, q.body)        # only things the caller OWNS - else 404
+        except SH.ShareError as exc:
+            fail(exc.code, exc.msg)
+        text = str(q.body.get("text") or "").strip()
+        if len(text) > int(self.c["post_max_chars"]):
+            fail(400, "a post can be at most %d characters" % int(self.c["post_max_chars"]))
+        with LOCK:
+            if key in self.my_shares(q.slug):
+                fail(409, "this is already shared - unshare it first to share a fresh copy")
+            pid = time.strftime("%Y%m%d-%H%M%S-") + secrets.token_hex(3)
+            title = data.pop("title")
+            summ = {k: data.get(k) for k in ("status", "verdict", "model", "name", "label", "created", "task", "summary") if data.get(k)}
+            summ["files"] = len(data.get("files") or [])
+            if isinstance(summ.get("task"), str):
+                summ["task"] = summ["task"][:300]
+            if isinstance(summ.get("summary"), str):
+                summ["summary"] = summ["summary"][:600]
+            S.jwrite(self.shared_path(pid), data)
+            p = {"id": pid, "author": q.slug, "author_email": q.email, "text": text, "created": S.now_s(), "edited": None, "attachments": [],
+                 "comments": [], "reactions": {}, "shared": {"kind": q.body.get("kind"), "key": key, "title": title, "at": S.now_s(),
+                                                            "summary": summ}}
+            self.save_post(p)
+        self.app.log("feed: %s shared %s as post %s" % (q.email, key, pid))
+        return 200, {"post": self.post_view(p, q)}
+
+    def unshare(self, q):
+        key = str(q.body.get("key") or "")
+        with LOCK:
+            pid = self.my_shares(q.slug).get(key)
+            if not pid:
+                fail(404, "you have not shared that")
+            self._delete(pid)
+        self.app.log("feed: %s unshared %s (post %s removed)" % (q.email, key, pid))
+        return 200, {"ok": True, "removed": pid}
+
+    def shares(self, q):
+        return 200, {"shares": self.my_shares(q.slug)}
+
+    def shared_item(self, q):
+        p = self.get_post(q.q.get("post") or "")
+        if not p.get("shared"):
+            fail(404, "that post is not a shared copy")
+        v = self.post_view(p, q)
+        v["data"] = S.jread(self.shared_path(p["id"]), {}) or {}
+        return 200, {"post": v}
+
+    def _delete(self, pid):
+        p = self.get_post(pid)
+        idx = self.files()
+        for f in p.get("attachments", []):
+            self._remove_file(f)
+            idx.pop(f, None)
+        S.jwrite(self.index_f, idx)
+        os.remove(self.post_path(p["id"]))
+        try:
+            os.remove(self.shared_path(p["id"]))
+        except OSError:
+            pass
 
     def take_files(self, q, ids, post_id, already=()):
         ids = [str(x) for x in (ids or [])]
@@ -192,7 +274,7 @@ class Feed:
             keep = [f for f in p["attachments"] if f not in remove]
             idx, added = self.take_files(q, q.body.get("add") or [], p["id"], keep)
             new_att = keep + [f for f in added if f not in keep]
-            if not text and not new_att:
+            if not text and not new_att and not p.get("shared"):
                 fail(400, "a post needs text or an attachment - delete it instead")
             for f in remove:
                 if f in p["attachments"] and f in idx:
@@ -209,12 +291,7 @@ class Feed:
             p = self.get_post(str(q.body.get("id") or ""))
             if p["author"] != q.slug and not q.admin:
                 fail(403, "only the author or an admin can delete a post")
-            idx = self.files()
-            for f in p.get("attachments", []):
-                self._remove_file(f)
-                idx.pop(f, None)
-            S.jwrite(self.index_f, idx)
-            os.remove(self.post_path(p["id"]))
+            self._delete(p["id"])
         self.app.log("feed post %s deleted by %s" % (p["id"], q.email))
         return 200, {"ok": True}
 
@@ -348,7 +425,8 @@ def routes(app):
     f = app.ext["feed"]
     return {("GET", "/posts"): f.list_posts, ("POST", "/posts"): f.create_post, ("POST", "/post/edit"): f.edit_post,
             ("POST", "/post/delete"): f.delete_post, ("POST", "/comment"): f.comment, ("POST", "/comment/delete"): f.comment_delete,
-            ("POST", "/react"): f.react, ("GET", "/preview"): f.preview, ("GET", "/usage"): f.usage, ("POST", "/upload/discard"): f.discard}
+            ("POST", "/react"): f.react, ("GET", "/preview"): f.preview, ("GET", "/usage"): f.usage, ("POST", "/upload/discard"): f.discard,
+            ("POST", "/share"): f.share, ("POST", "/unshare"): f.unshare, ("GET", "/shares"): f.shares, ("GET", "/shared"): f.shared_item}
 
 
 def raw_routes(app):

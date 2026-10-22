@@ -4,7 +4,7 @@
 (function () {
   "use strict";
   var TB = window.TB = { views: {}, me: null };
-  var BANNER = "TEAM SANDBOX - this is the team's shared workspace on the team computer. Not your computer, not Marjus's computer.";
+  var BANNER = "TEAM PROJECT SPACE - on the team computer, not your computer and not Marjus's computer";
 
   function h(tag, attrs) {
     var el = document.createElement(tag);
@@ -46,7 +46,7 @@
     v.focus({ preventScroll: true });
   }
   function err(e) { return h("div", { class: "err", role: "alert", text: (e && e.message) || String(e) }); }
-  function banner() { return h("div", { class: "banner", role: "note" }, BANNER, h("small", { text: "Only you and the team's admins can see your sandboxes. Tests run in a locked jail with no network." })); }
+  function banner() { return h("div", { class: "banner", role: "note" }, BANNER, h("small", { text: "Only you and the team's admins can see your projects - unless you press Share to feed. Tests run in a locked jail with no network." })); }
   function pill(text, kind) { return h("span", { class: "pill " + (kind || ""), text: text }); }
   function statusPill(s) { return pill(s || "-", /pass|promoted|ok/.test(s || "") ? "ok" : /FAIL|reject|error|interrupt/.test(s || "") ? "bad" : ""); }
   function fmtDiff(text) {
@@ -69,8 +69,8 @@
 
   // ------------------------------------------------------------------ nav
   var NAV = [
-    ["#/", "Home"], ["#/tour", "Tour"], ["#/sandboxes", "Sandboxes"], ["#/builds", "AI builds"], ["#/models", "Models & chat"],
-    ["#/byo", "Your own AI tool"], ["#/caps", "Your caps"], ["#/profile", "Profile"]
+    ["#/", "Home"], ["#/tour", "Tour"], ["#/projects", "Projects"], ["#/builds", "AI builds"], ["#/models", "Models & chat"],
+    ["#/vault", "Vault"], ["#/byo", "Your own AI tool"], ["#/caps", "Your caps"], ["#/profile", "Profile"]
   ];
   function renderNav(mods) {
     var nav = document.getElementById("nav"); nav.textContent = "";
@@ -79,9 +79,10 @@
     (mods || []).forEach(function (m) {
       nav.appendChild(h("a", { href: "#/m/" + m.id }, m.nav, m.status !== "live" ? h("span", { class: "soon", text: "coming soon" }) : null));
     });
-    if (TB.me && TB.me.admin) { nav.appendChild(h("h4", { text: "Admin" })); nav.appendChild(h("a", { href: "#/admin", text: "Admin: review & promote" })); }
+    if (TB.me && TB.me.admin) { nav.appendChild(h("h4", { text: "Admin" })); nav.appendChild(h("a", { href: "#/admin", text: "Admin: review & promote" })); nav.appendChild(h("a", { href: "#/admin/invites", text: "Admin: invites & accounts" })); }
     nav.appendChild(h("h4", { text: "Help" }));
     nav.appendChild(h("a", { href: "/how-it-works", text: "How it works" }));
+    if (TB.me && TB.me.signed_in_with === "session") nav.appendChild(h("button", { class: "ghost small", type: "button", id: "signOut", onclick: signOut }, "Sign out"));
     markNav();
   }
   function markNav() {
@@ -97,11 +98,12 @@
     show(h("h1", { text: "Welcome" + (TB.me.display_name ? ", " + TB.me.display_name : "") }),
       h("p", {}, "This is the team box: the team's own computer. ", h("a", { href: "#/tour", text: "Take the 1-minute tour" }), " if you are new."),
       h("div", { class: "grid" },
-        tile("Sandboxes", "Your private project folders (git repos).", "#/sandboxes"),
-        tile("AI builds", "Let a shared AI build something in a sandbox.", "#/builds"),
+        tile("Projects", "Your private project spaces (git repos).", "#/projects"),
+        tile("AI builds", "Let a shared AI build something in a project.", "#/builds"),
+        tile("Vault", "Your encrypted notes and files.", "#/vault"),
         tile("Models & chat", "Chat, start/stop models, save your own settings versions.", "#/models"),
         tile("Your own AI tool", "Connect Claude Code, Codex, Cursor or OpenCode.", "#/byo")),
-      TB.me.dev_mode ? h("div", { class: "err", text: "DEV MODE is on: identity comes from a test header/cookie, not Cloudflare Access. Never on the real box." }) : null,
+      TB.me.dev_mode ? h("div", { class: "err", text: "DEV MODE is on: identity comes from a test header/cookie, not the sign-in. Never on the real box." }) : null,
       h("div", { id: "home-feed" }, h("p", { class: "muted", text: "Loading the home feed..." })));
     if (TB.homeFeed) TB.homeFeed(document.getElementById("home-feed"));     // static/feeds.js
   }
@@ -137,18 +139,18 @@
     api("GET", "/api/sandboxes" + q).then(function (j) {
       var name = h("input", { placeholder: "e.g. weather-bot", maxlength: "40", id: "newSandboxName" });
       var out = h("div");
-      show(banner(), h("h1", { text: TB.me.admin ? "All sandboxes (admin view)" : "Your sandboxes" }),
-        h("div", { class: "tbl" }, h("table", {}, h("tr", {}, h("th", { text: "Sandbox" }), TB.me.admin ? h("th", { text: "Owner" }) : null, h("th", { text: "Created" }), h("th", { text: "" })),
+      show(banner(), h("h1", { text: TB.me.admin ? "All projects (admin view)" : "Your projects" }),
+        h("div", { class: "tbl" }, h("table", {}, h("tr", {}, h("th", { text: "Project" }), TB.me.admin ? h("th", { text: "Owner" }) : null, h("th", { text: "Created" }), h("th", { text: "" })),
           j.sandboxes.map(function (s) {
-            return h("tr", {}, h("td", {}, h("a", { href: "#/sandbox/" + s.owner + "/" + s.name, text: s.label || s.name })),
+            return h("tr", {}, h("td", {}, h("a", { href: "#/project/" + s.owner + "/" + s.name, text: s.label || s.name })),
               TB.me.admin ? h("td", { text: s.owner_email || s.owner }) : null, h("td", { text: s.created || "" }), h("td", {}, s.busy ? pill(s.busy) : null));
           }))),
-        h("div", { class: "card" }, h("h3", { text: "New sandbox" }), h("label", { for: "newSandboxName", text: "Name" }), name,
+        h("div", { class: "card" }, h("h3", { text: "New project" }), h("label", { for: "newSandboxName", text: "Name" }), name,
           h("div", { class: "row" }, h("button", { onclick: function () {
-            api("POST", "/api/sandboxes", { name: name.value }).then(function (r) { location.hash = "#/sandbox/" + r.sandbox.owner + "/" + r.sandbox.name; })
+            api("POST", "/api/sandboxes", { name: name.value }).then(function (r) { location.hash = "#/project/" + r.sandbox.owner + "/" + r.sandbox.name; })
               .catch(function (e) { out.textContent = ""; out.appendChild(err(e)); });
           } }, "Create")), out,
-          h("p", { class: "muted", text: "Every new sandbox starts from the clean starter template (README, guardrail files, an example) - never anyone's own files." })));
+          h("p", { class: "muted", text: "Every new project starts from the clean starter template (README, guardrail files, an example) - never anyone's own files. It is private until you press Share to feed." })));
     }).catch(function (e) { show(err(e)); });
   }
 
@@ -159,8 +161,9 @@
       var sel = h("select", { id: "buildModel" }, models.map(function (m) { return h("option", { value: m.id, text: m.name + " (" + m.state + ")" }); }));
       var out = h("div"), fileBox = h("div"), testOut = h("div");
       var mine = owner === TB.me.id;
-      show(banner(), h("h1", { text: "Sandbox: " + (s.label || s.name) }),
+      show(banner(), h("h1", { text: "Project: " + (s.label || s.name) }),
         h("p", { class: "muted", text: "Owner: " + (s.owner_email || s.owner) + (s.busy ? " - busy: " + s.busy : "") + " - " + s.size_mb + " MB" }),
+        mine && TB.shareButton ? h("div", { class: "row" }, TB.shareButton({ kind: "project", project: name }, "project:" + owner + "/" + name), h("span", { class: "muted small", text: "Private until you share it; sharing posts a read-only copy and never gives access to the project." })) : null,
         h("div", { class: "card" }, h("h3", { text: "Clone with your own AI tool" }), h("pre", { text: "git clone " + s.clone_url }),
           h("div", { class: "row" }, copyBtn(function () { return "git clone " + s.clone_url; }), h("a", { href: "#/byo", text: "How (tokens, tools)" }))),
         mine ? h("div", { class: "card" }, h("h3", { text: "AI build" }), h("label", { for: "buildTask", text: "Task" }), task, h("label", { for: "buildModel", text: "Model" }), sel,
@@ -188,7 +191,7 @@
   }
 
   function buildsTable(list) {
-    return h("table", {}, h("tr", {}, h("th", { text: "Build" }), h("th", { text: "Kind" }), h("th", { text: "Sandbox" }), h("th", { text: "Status" }), h("th", { text: "Verdict" }), h("th", { text: "When" })),
+    return h("table", {}, h("tr", {}, h("th", { text: "Build" }), h("th", { text: "Kind" }), h("th", { text: "Project" }), h("th", { text: "Status" }), h("th", { text: "Verdict" }), h("th", { text: "When" })),
       list.map(function (b) {
         return h("tr", {}, h("td", {}, h("a", { href: "#/build/" + b.id, text: b.title || b.id })), h("td", { text: b.kind }),
           h("td", { text: (TB.me.admin && b.owner !== TB.me.id ? (b.owner_email || b.owner) + " / " : "") + b.sandbox }),
@@ -200,7 +203,7 @@
     api("GET", "/api/builds" + (TB.me.admin ? "?all=1" : "")).then(function (j) {
       show(banner(), h("h1", { text: TB.me.admin ? "All builds (admin view)" : "Your builds" }),
         h("p", { class: "muted", text: "AI builds you started and pushes from your own AI tool. Running on the team box now: " + j.running + " of " + j.max_total + " at most. One per person at a time." }),
-        j.builds.length ? h("div", { class: "tbl" }, buildsTable(j.builds)) : h("p", {}, "No builds yet. Open a ", h("a", { href: "#/sandboxes", text: "sandbox" }), " and start one."));
+        j.builds.length ? h("div", { class: "tbl" }, buildsTable(j.builds)) : h("p", {}, "No builds yet. Open a ", h("a", { href: "#/projects", text: "project" }), " and start one."));
     }).catch(function (e) { show(err(e)); });
   }
 
@@ -212,10 +215,11 @@
       var actions = h("div", { class: "row" });
       if (b.status === "running" && (b.owner === TB.me.id || TB.me.admin)) actions.appendChild(h("button", { class: "ghost", onclick: function () { api("POST", "/api/builds/" + id + "/stop", {}).then(function () { vBuild(id); }); } }, "Stop"));
       if (b.kind === "ai" && b.owner === TB.me.id && !b.applied && /waiting|nothing|rejected|promoted/.test(b.status)) actions.appendChild(h("button", { class: "ghost", onclick: function () {
-        api("POST", "/api/builds/" + id + "/apply", {}).then(function () { vBuild(id); }).catch(function (e) { out.textContent = ""; out.appendChild(err(e)); }); } }, "Apply to my sandbox"));
+        api("POST", "/api/builds/" + id + "/apply", {}).then(function () { vBuild(id); }).catch(function (e) { out.textContent = ""; out.appendChild(err(e)); }); } }, "Apply to my project"));
       if (b.can_reject) actions.appendChild(h("button", { class: "ghost", onclick: function () {
         if (!confirm("Reject this build?")) return;
         api("POST", "/api/builds/" + id + "/reject", {}).then(function () { vBuild(id); }).catch(function (e) { out.textContent = ""; out.appendChild(err(e)); }); } }, "Reject"));
+      if (b.owner === TB.me.id && !/running|testing|queued/.test(b.status) && TB.shareButton) actions.appendChild(TB.shareButton({ kind: "build", build: id }, "build:" + id));
       if (b.can_promote) actions.appendChild(h("button", { onclick: function () {
         if (!confirm("Promote " + (b.files || []).length + " file(s) into the shared team project?\n\n" + (b.files || []).map(function (f) { return f.status + " " + f.path; }).join("\n") + "\n\nFlags: " + ((b.flags || []).join("; ") || "none"))) return;
         api("POST", "/api/builds/" + id + "/promote", { confirm: true, head: b.head }).then(function () { vBuild(id); }).catch(function (e) { out.textContent = ""; out.appendChild(err(e)); }); } }, "Promote (admin)"));
@@ -284,15 +288,33 @@
   function vChat(id) {
     api("GET", "/api/chats/" + id).then(function (r) {
       var c = r.chat, box = h("div"), input = h("textarea", { id: "chatInput", placeholder: "Message" }), btn;
-      function paint() { box.textContent = ""; c.messages.forEach(function (m) { box.appendChild(h("div", { class: "msg " + m.role, text: m.content })); }); }
+      function paint() { box.textContent = ""; c.messages.forEach(function (m) {
+        box.appendChild(h("div", { class: "msg " + m.role }, m.lumi ? h("div", { class: "msg-head muted", text: "Lumi" }) : null, linkify(m.content)));
+      }); }
       paint();
       btn = h("button", { onclick: function () {
         var t = input.value; if (!t.trim()) return; btn.disabled = true; btn.textContent = "Waiting for the model...";
         api("POST", "/api/chats/" + id + "/send", { text: t }).then(function (j) { c = j.chat; input.value = ""; paint(); })
           .catch(function (e) { box.appendChild(err(e)); }).then(function () { btn.disabled = false; btn.textContent = "Send"; });
       } }, "Send");
-      show(h("h1", { text: c.title }), h("p", { class: "muted", text: "Model: " + c.model + " - settings version: " + (c.version === "original" ? "Original" : c.version) + " - saved under your profile" }), box, h("label", { for: "chatInput", text: "Your message" }), input, h("div", { class: "row" }, btn, h("a", { href: "#/models", text: "Back" })));
+      show(h("h1", { text: c.title }), h("p", { class: "muted", text: c.lumi ? "Lumi (Marjus's AI assistant) through the team's shared model " + c.model + ". Lumi never asks for your PIN or vault password. This chat is saved under your profile." : "Model: " + c.model + " - settings version: " + (c.version === "original" ? "Original" : c.version) + " - saved under your profile" }), box, h("label", { for: "chatInput", text: "Your message" }), input, h("div", { class: "row" }, btn, h("a", { href: "#/models", text: "Back" })));
     }).catch(function (e) { show(err(e)); });
+  }
+  // links in a chat message: only this site's own addresses and #/ routes become links; everything else stays text
+  function linkify(text) {
+    var out = h("div", { class: "mtext" }), rx = /(https?:\/\/[^\s)"'<>]+|#\/[A-Za-z0-9_\/\-.%@]+|\/how-it-works)/g, last = 0, m;
+    var origin = location.origin, pub = (TB.me && TB.me.public_url || "").replace(/\/$/, "");
+    text = String(text || "");
+    while ((m = rx.exec(text))) {
+      var u = m[0].replace(/[.,;:!?]+$/, ""), href = null;
+      if (u.indexOf("#/") === 0 || u === "/how-it-works") href = u;
+      else if (u.indexOf(origin + "/") === 0 || (pub && u.indexOf(pub + "/") === 0)) href = u.slice(u.indexOf("/", 8));
+      out.appendChild(document.createTextNode(text.slice(last, m.index)));
+      out.appendChild(href ? h("a", { href: href, text: u }) : document.createTextNode(u));
+      last = m.index + u.length; rx.lastIndex = last;
+    }
+    out.appendChild(document.createTextNode(text.slice(last)));
+    return out;
   }
   function vVersions(model) {
     api("GET", "/api/versions?model=" + encodeURIComponent(model)).then(function (v) {
@@ -304,7 +326,8 @@
         h("div", { class: "tbl" }, h("table", {}, v.versions.map(function (x) {
           return h("tr", {}, h("td", {}, h("strong", { text: x.name })), h("td", {}, h("code", { text: JSON.stringify(x.settings) })), h("td", { text: x.created || x.note || "" }),
             h("td", {}, x.original ? pill("always kept") : h("button", { class: "ghost small", onclick: function () { api("POST", "/api/versions/delete", { model: model, id: x.id }).then(function () { vVersions(model); }); } }, "Delete")),
-            h("td", {}, h("button", { class: "small", onclick: function () { newChat(model, x.id); } }, "Chat with it")));
+            h("td", {}, h("button", { class: "small", onclick: function () { newChat(model, x.id); } }, "Chat with it")),
+            h("td", {}, x.original || !TB.shareButton ? null : TB.shareButton({ kind: "version", model: model, version: x.id }, "version:" + TB.me.id + ":" + model + ":" + x.id)));
         }))),
         h("div", { class: "card" }, h("h3", { text: "Save a new version" }),
           h("label", { for: "vName", text: "Name" }), f.name, h("label", { for: "vSys", text: "System prompt" }), f.system_prompt,
@@ -325,11 +348,10 @@
       var label = h("input", { id: "tokLabel", placeholder: "e.g. laptop Claude Code" }), out = h("div");
       show(banner(), h("h1", { text: "Use your own AI tool" }),
         h("ol", {}, h("li", { text: "Make a token below. It is shown once - copy it." }),
-          h("li", {}, "Clone a sandbox: ", h("code", { text: "git clone " + t.git_base + "<sandbox>.git" }), " (username: anything, password: the token)."),
+          h("li", {}, "Clone a project: ", h("code", { text: "git clone " + t.git_base + "<sandbox>.git" }), " (username: anything, password: the token)."),
           h("li", { text: "Open the folder in Claude Code, Codex, Cursor, OpenCode or any tool. The repo already holds CLAUDE.md, AGENTS.md, .cursorrules, opencode.json and others telling the tool it is in a TEAM SANDBOX and must stay inside it." }),
           h("li", { text: "git push - the team box runs your tests in the jail and lists the push under AI builds, where an admin can review and promote it." })),
-        h("p", { class: "muted", text: "Those guardrail files are guidance only - the server's jail, the per-member token and admin-only promote are the real protection. A token reaches only your own sandboxes." }),
-        h("p", { class: "muted", text: "If Cloudflare Access asks for a browser login on git, ask an admin: the /git/ path is meant to use your token instead." }),
+        h("p", { class: "muted", text: "Those guardrail files are guidance only - the server's jail, the per-member token and admin-only promote are the real protection. A token reaches only your own projects." }),
         h("h2", { text: "Your git tokens" }),
         t.tokens.length ? h("div", { class: "tbl" }, h("table", {}, h("tr", {}, h("th", { text: "Label" }), h("th", { text: "Created" }), h("th", { text: "Last used" }), h("th", { text: "" })),
           t.tokens.map(function (k) { return h("tr", {}, h("td", { text: k.label }), h("td", { text: k.created }), h("td", { text: k.last_used || "never" }),
@@ -357,12 +379,132 @@
     }).catch(function (e) { show(err(e)); });
   }
 
+  function profileFields() {
+    var p = TB.me.profile || {};
+    return { display_name: h("input", { id: "pName", value: TB.me.display_name || "", maxlength: "60" }), language: h("input", { id: "pLang", value: TB.me.language || "en", maxlength: "12" }),
+      about: h("textarea", { id: "pAbout", maxlength: "600" }, p.about || ""), contact: h("input", { id: "pContact", value: p.contact || "", maxlength: "200" }),
+      timezone: h("input", { id: "pTz", value: p.timezone || (Intl.DateTimeFormat().resolvedOptions().timeZone || ""), maxlength: "60" }) };
+  }
+  function profileForm(f) {
+    return [h("label", { for: "pName", text: "Display name (what the team sees)" }), f.display_name, h("label", { for: "pLang", text: "Language (e.g. en, sq, it)" }), f.language,
+      h("label", { for: "pAbout", text: "About you (optional)" }), f.about, h("label", { for: "pContact", text: "How the team can reach you outside the box (optional)" }), f.contact,
+      h("label", { for: "pTz", text: "Time zone (optional)" }), f.timezone];
+  }
+  function vals(f) { var o = {}; Object.keys(f).forEach(function (k) { o[k] = f[k].value; }); return o; }
   function vProfile() {
-    var dn = h("input", { id: "pName", value: TB.me.display_name || "" }), lang = h("input", { id: "pLang", value: TB.me.language || "en" }), out = h("div");
-    show(h("h1", { text: "Profile" }), h("p", { text: TB.me.email + " - " + (TB.me.admin ? "admin" : "team member") }),
-      h("label", { for: "pName", text: "Display name" }), dn, h("label", { for: "pLang", text: "Language (e.g. en, sq, it)" }), lang,
-      h("div", { class: "row" }, h("button", { onclick: function () { api("POST", "/api/profile", { display_name: dn.value, language: lang.value }).then(function () { out.textContent = ""; out.appendChild(h("div", { class: "okbox", text: "Saved" })); boot(true); }).catch(function (e) { out.textContent = ""; out.appendChild(err(e)); }); } }, "Save"),
-        h("a", { class: "btn ghost", href: "#/byo", text: "Git tokens" }), h("a", { class: "btn ghost", href: "#/tour", text: "Open the tour again" })), out);
+    var f = profileFields(), out = h("div"), acc = TB.me.account;
+    var oldPin = h("input", { type: "password", id: "pinOld", inputmode: "numeric", autocomplete: "current-password" }), newPin = h("input", { type: "password", id: "pinNew", inputmode: "numeric", autocomplete: "new-password" }), pout = h("div");
+    show(h("h1", { text: "Profile" }), h("p", { text: (acc ? "Signed in as " + (acc.identifiers || []).join(", ") + " (account " + acc.id + ")" : TB.me.email) + " - " + (TB.me.admin ? "admin" : "team member") }),
+      profileForm(f),
+      h("div", { class: "row" }, h("button", { onclick: function () { api("POST", "/api/profile", vals(f)).then(function () { out.textContent = ""; out.appendChild(h("div", { class: "okbox", text: "Saved" })); boot(true); }).catch(function (e) { out.textContent = ""; out.appendChild(err(e)); }); } }, "Save"),
+        h("a", { class: "btn ghost", href: "#/byo", text: "Git tokens" }), h("a", { class: "btn ghost", href: "#/vault", text: "Vault" }), h("a", { class: "btn ghost", href: "#/tour", text: "Open the tour again" })), out,
+      acc ? h("div", { class: "card" }, h("h3", { text: "Signing in" }),
+        h("p", { class: "muted", text: "You stay signed in until " + TB.me.session.idle_minutes + " minutes without activity, or " + TB.me.session.absolute_hours + " hours at most. Nobody - not Marjus, not Lumi - will ever ask for your PIN or vault password." }),
+        h("div", { class: "row" }, h("button", { class: "ghost", type: "button", onclick: signOut }, "Sign out"),
+          h("button", { class: "danger", type: "button", id: "signOutAll", onclick: function () {
+            if (!confirm("Sign out on every device and browser?")) return;
+            api("POST", "/api/auth/logout-all", {}).then(function () { location.hash = "#/"; location.reload(); });
+          } }, "Sign out everywhere")),
+        h("h3", { text: "Change PIN" }), h("label", { for: "pinOld", text: "Current PIN" }), oldPin, h("label", { for: "pinNew", text: "New PIN (digits, at least 6)" }), newPin,
+        h("div", { class: "row" }, h("button", { class: "small", type: "button", onclick: function () {
+          api("POST", "/api/auth/pin", { old: oldPin.value, new: newPin.value }).then(function () { pout.textContent = ""; pout.appendChild(h("div", { class: "okbox", text: "PIN changed" })); oldPin.value = newPin.value = ""; })
+            .catch(function (e) { pout.textContent = ""; pout.appendChild(err(e)); });
+        } }, "Change PIN")), pout) : null);
+  }
+  function signOut() { api("POST", "/api/auth/logout", {}).catch(function () {}).then(function () { location.hash = "#/"; location.reload(); }); }
+
+  // ------------------------------------------------------------------ signed out: sign in, or first visit with the invite code
+  function bare() { document.getElementById("nav").textContent = ""; document.getElementById("who").textContent = ""; }
+  var NEVER = "Marjus and Lumi will never ask for your PIN or your vault password.";
+  function vSignIn(why) {
+    bare();
+    var id = h("input", { id: "signinId", autocomplete: "username" }), pin = h("input", { type: "password", id: "signinPin", inputmode: "numeric", autocomplete: "current-password" }), out = h("div");
+    show(h("h1", { text: "Sign in to the team box" }), why && !/not signed in/.test(why) ? h("p", { class: "muted", text: why }) : null,
+      h("form", { class: "card", onsubmit: function (ev) {
+        ev.preventDefault(); out.textContent = "";
+        api("POST", "/api/auth/login", { identifier: id.value, pin: pin.value }).then(function () { location.hash = "#/"; boot(); }).catch(function (e) { out.appendChild(err(e)); pin.value = ""; });
+      } }, h("label", { for: "signinId", text: "Your sign-in name (the phone number, email or name you chose)" }), id, h("label", { for: "signinPin", text: "PIN" }), pin,
+        h("div", { class: "row" }, h("button", { type: "submit" }, "Sign in")), out),
+      h("p", {}, "First time here? ", h("a", { href: "#/join", text: "I have an invite code" })),
+      h("p", { class: "muted", text: NEVER + " Forgot your PIN? Ask Marjus for a new invite." }),
+      h("p", {}, h("a", { href: "/how-it-works", text: "How this site works" })));
+  }
+  function vJoin() {
+    bare();
+    var code = h("input", { id: "joinCode", inputmode: "numeric", autocomplete: "one-time-code", placeholder: "1234 5678 9012", maxlength: "20" }), out = h("div");
+    show(h("h1", { text: "Welcome to the team box" }), h("p", { text: "Lumi (Marjus's AI assistant) gave you a 12-digit invite code by email or on the phone. Type it here. It works once and expires." }),
+      h("form", { class: "card", onsubmit: function (ev) {
+        ev.preventDefault(); out.textContent = "";
+        api("POST", "/api/auth/join", { code: code.value }).then(function (r) { vSetup(r.setup); }).catch(function (e) { out.appendChild(err(e)); });
+      } }, h("label", { for: "joinCode", text: "Invite code" }), code, h("div", { class: "row" }, h("button", { type: "submit" }, "Continue")), out),
+      h("p", { class: "muted", text: NEVER }), h("p", {}, h("a", { href: "#/signin", text: "I already have an account - sign in" })));
+  }
+  function vSetup(st) {
+    bare();
+    var sugg = st.suggestions || [];
+    var id = h("input", { id: "setupId", value: sugg[0] || "", autocomplete: "username", list: "setupIdList" });
+    var dl = h("datalist", { id: "setupIdList" }, sugg.map(function (s) { return h("option", { value: s }); }));
+    var p1 = h("input", { type: "password", id: "setupPin", inputmode: "numeric", autocomplete: "new-password" }), p2 = h("input", { type: "password", id: "setupPin2", inputmode: "numeric", autocomplete: "new-password" }), out = h("div");
+    show(h("h1", { text: "Hi " + (st.name || "") + "!" }), h("p", { text: "Marjus invited you to: " + (st.purpose || "") }),
+      h("form", { class: "card", onsubmit: function (ev) {
+        ev.preventDefault(); out.textContent = "";
+        if (!/^\d{6,12}$/.test(p1.value)) return out.appendChild(err("your PIN must be 6 to 12 digits"));
+        if (p1.value !== p2.value) return out.appendChild(err("the two PINs are not the same"));
+        api("POST", "/api/auth/setup", { identifier: id.value, pin: p1.value, pin2: p2.value }).then(function () { location.hash = "#/setup/vault"; boot(); }).catch(function (e) { out.appendChild(err(e)); });
+      } }, h("label", { for: "setupId", text: "Your sign-in name - your phone number, email or a name you will remember" }), id, dl,
+        h("label", { for: "setupPin", text: "Choose a PIN - your sign-in code (digits, at least 6)" }), p1, h("label", { for: "setupPin2", text: "The PIN again" }), p2,
+        h("div", { class: "row" }, h("button", { type: "submit" }, "Next: your vault")), out),
+      h("p", { class: "muted", text: NEVER }));
+  }
+  function vSetupVault() {
+    var el = h("div");
+    show(h("h1", { text: "Step 2: your vault password" }), el);
+    if (!TB.vaultSetup) return el.appendChild(err("the vault page did not load"));
+    TB.vaultSetup(el, function () { boot(); });
+  }
+  function vSetupProfile() {
+    var f = profileFields(), out = h("div");
+    show(h("h1", { text: "Step 3: about you (optional)" }), h("p", { class: "muted", text: "Fill in what you like - or skip it. You can change it later on your Profile." }),
+      profileForm(f), h("div", { class: "row" },
+        h("button", { onclick: function () { api("POST", "/api/setup/profile", vals(f)).then(function () { boot(); }).catch(function (e) { out.appendChild(err(e)); }); } }, "Save and continue"),
+        h("button", { class: "ghost", id: "profileSkip", onclick: function () { api("POST", "/api/setup/profile", { skip: true }).then(function () { boot(); }).catch(function (e) { out.appendChild(err(e)); }); } }, "Skip")), out);
+  }
+  function vWelcome() {
+    show(h("h1", { text: "Lumi is saying hello..." }), h("p", { class: "muted", text: "Your first project is ready; Lumi is writing your welcome message." }));
+    api("POST", "/api/welcome", {}).then(function (r) { TB.me.setup_next = null; location.hash = "#/chat/" + r.chat.id; }).catch(function (e) { show(err(e)); });
+  }
+
+  // ------------------------------------------------------------------ admin: invites + accounts
+  function vInvites() {
+    if (!TB.me.admin) return show(err("Admins only"));
+    Promise.all([api("GET", "/api/admin/invites"), api("GET", "/api/admin/accounts")]).then(function (r) {
+      var f = { name: h("input", { id: "invName" }), phone: h("input", { id: "invPhone", inputmode: "tel" }), email: h("input", { id: "invEmail", inputmode: "email" }),
+        purpose: h("textarea", { id: "invPurpose", placeholder: "what they are here to do - Lumi welcomes them with it and names their first project from it" }), language: h("input", { id: "invLang", value: "en" }) };
+      var out = h("div");
+      show(h("h1", { text: "Admin: invites & accounts" }),
+        h("p", { class: "muted", text: "Lumi can do this for you (\"invite <name>, <phone/email>, they're here to <purpose>\"). The code is shown once; the person types it at /join, then sets their PIN and vault password." }),
+        h("form", { class: "card", onsubmit: function (ev) {
+          ev.preventDefault(); out.textContent = "";
+          api("POST", "/api/admin/invites", vals(f)).then(function (j) {
+            out.appendChild(h("div", { class: "okbox" }, "Invite for " + j.name + " - code (shown only now): ", h("strong", { id: "newInviteCode", text: j.code }), " - " + j.link + " - expires " + j.expires));
+          }).catch(function (e) { out.appendChild(err(e)); });
+        } }, h("h3", { text: "New invite" }), h("label", { for: "invName", text: "Name" }), f.name, h("label", { for: "invPhone", text: "Phone (optional)" }), f.phone,
+          h("label", { for: "invEmail", text: "Email (optional)" }), f.email, h("label", { for: "invPurpose", text: "What are they here to do?" }), f.purpose,
+          h("label", { for: "invLang", text: "Language" }), f.language, h("div", { class: "row" }, h("button", { type: "submit" }, "Make invite code")), out),
+        h("h2", { text: "Invites" }),
+        h("div", { class: "tbl" }, h("table", {}, h("tr", {}, ["Name", "Account", "Status", "Expires", "Purpose", ""].map(function (t) { return h("th", { text: t }); })),
+          r[0].invites.map(function (i) { return h("tr", {}, h("td", { text: i.name }), h("td", { text: i.account }), h("td", {}, pill(i.status, i.status === "used" ? "ok" : /locked|revoked|expired/.test(i.status) ? "bad" : "")),
+            h("td", { text: i.expires }), h("td", { text: i.purpose }),
+            h("td", {}, /pending|redeemed/.test(i.status) ? h("button", { class: "danger small", onclick: function () { api("POST", "/api/admin/invites/" + i.id + "/revoke", {}).then(vInvites); } }, "Revoke") : null)); }))),
+        h("h2", { text: "Accounts" }),
+        h("div", { class: "tbl" }, h("table", {}, h("tr", {}, ["Account", "Sign-in name", "Role", "Status", "Sessions", ""].map(function (t) { return h("th", { text: t }); })),
+          r[1].accounts.map(function (a) {
+            function act(x) { return h("button", { class: "ghost small", onclick: function () { api("POST", "/api/admin/accounts/" + encodeURIComponent(a.id) + "/" + x, {}).then(vInvites).catch(function (e) { show(err(e)); }); } }, x); }
+            return h("tr", {}, h("td", { text: a.id + " (" + a.name + ")" }), h("td", { text: (a.identifiers || []).join(", ") }), h("td", { text: a.role }),
+              h("td", {}, pill(a.locked ? "locked" : a.status, a.status === "active" && !a.locked ? "ok" : "bad")), h("td", { text: String(a.sessions) }),
+              h("td", {}, a.status === "active" ? act("disable") : act("enable"), a.locked ? act("unlock") : null, act("signout")));
+          }))));
+    }).catch(function (e) { show(err(e)); });
   }
 
   function vAdmin() {
@@ -396,8 +538,18 @@
     var v = p[0] || "";
     if (v === "") return vHome();
     if (v === "tour") return vTour();
-    if (v === "sandboxes") return vSandboxes();
-    if (v === "sandbox" && p[2]) return vSandbox(p[1], p[2]);
+    if (TB.me.setup_next) {                                         // first visit of an invited account: finish the steps first
+      var want = TB.me.setup_next === "welcome" ? "welcome" : "setup/" + TB.me.setup_next;
+      if ((v === "setup" ? "setup/" + p[1] : v) !== want) { location.hash = "#/" + want; return; }
+    }
+    if (v === "setup" && p[1] === "vault") return vSetupVault();
+    if (v === "setup" && p[1] === "profile") return vSetupProfile();
+    if (v === "welcome") return vWelcome();
+    if (v === "join" || v === "signin") { location.hash = "#/"; return; }
+    if (v === "projects" || v === "sandboxes") return vSandboxes();          // old #/sandbox... addresses keep working
+    if ((v === "project" || v === "sandbox") && p[2]) return vSandbox(p[1], p[2]);
+    if (v === "vault") return TB.views.vault ? TB.views.vault() : show(err("the vault page did not load"));
+    if (v === "admin" && p[1] === "invites") return vInvites();
     if (v === "builds") return vBuilds();
     if (v === "build" && p[1]) return vBuild(p[1]);
     if (v === "models") return vModels();
@@ -413,13 +565,19 @@
 
   function boot(quiet) {
     return Promise.all([api("GET", "/api/me"), api("GET", "/api/modules")]).then(function (r) {
-      TB.me = r[0]; TB.modules = r[1].modules;
+      TB.me = r[0]; TB.modules = r[1].modules; TB.shares = null;
       document.getElementById("who").textContent = (TB.me.display_name || TB.me.email) + (TB.me.admin ? " (admin)" : "");
       renderNav(TB.modules);
       if (quiet) return;
-      if (TB.me.first_visit && (location.hash || "#/") === "#/") location.hash = "#/tour";
+      if (TB.me.first_visit && !TB.me.setup_next && !TB.me.account && (location.hash || "#/") === "#/") location.hash = "#/tour";
       else route();
-    }).catch(function (e) { show(err(e), h("p", {}, h("a", { href: "/how-it-works", text: "How this site works" }))); });
+    }).catch(function (e) {
+      if (e.status !== 401) return show(err(e), h("p", {}, h("a", { href: "/how-it-works", text: "How this site works" })));
+      TB.me = null;
+      var hp = (location.hash || "").slice(2);
+      if (location.pathname === "/join" || hp === "join") return api("GET", "/api/auth/state").then(function (s) { return s.setup ? vSetup(s.setup) : vJoin(); }).catch(function () { vJoin(); });
+      api("GET", "/api/auth/state").then(function (s) { if (s.setup) vSetup(s.setup); else vSignIn(e.message); }).catch(function () { vSignIn(e.message); });
+    });
   }
 
   function theme() {
@@ -436,7 +594,11 @@
     });
     var mb = document.getElementById("menuBtn");
     mb.addEventListener("click", function () { var n = document.getElementById("nav"); n.classList.toggle("open"); mb.setAttribute("aria-expanded", n.classList.contains("open")); });
-    window.addEventListener("hashchange", route);
+    window.addEventListener("hashchange", function () {
+      if (TB.me) return route();
+      var hp = (location.hash || "").slice(2);
+      if (hp === "join") vJoin(); else if (hp === "signin") vSignIn();
+    });
     boot();
   });
 })();

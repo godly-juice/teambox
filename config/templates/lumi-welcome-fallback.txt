@@ -1,0 +1,15 @@
+Hi $name, I'm Lumi, Marjus's AI assistant. Welcome to the team box - the team's own computer (not your computer and not
+Marjus's computer). Nobody will ever ask you for your PIN or your vault password, me included.
+
+Marjus invited you to: $purpose
+
+Your first project is ready: "$project_label" - $project_link . It is private (only you and the admins see it) until you press
+"Share to feed".
+
+Where to do what:
+$areas
+
+Messages, calls and your vault are covered by the team's monitoring notice: I (Lumi) can read them.
+
+(The team's AI model did not answer just now, so this is my standard welcome: $why. You can start a chat with a model any time
+under Models & chat.)

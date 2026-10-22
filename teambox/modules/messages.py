@@ -235,8 +235,18 @@ def export_http(app, h, method, path, query):
             return h.send(200, out)
         if path == "/export/comms/blob":
             return h.send(200, cm.blob_chunk_get(qs.get("id") or "", int(qs.get("i") or 0)))
+        if path == "/export/vault":                                 # members' vault items: ciphertext + Lumi's wrapped key only
+            out = app.vault.export_since(int(qs.get("cursor") or 0))
+            app.log("vault export: %d item(s) after cursor %s" % (len(out["items"]), qs.get("cursor") or 0))
+            return h.send(200, out)
+        if path == "/export/vault/blob":
+            return h.send(200, app.vault.chunk_get(qs.get("member") or "", qs.get("id") or "", int(qs.get("i") or 0)))
     except CommsError as exc:
         return h.send(exc.code, {"error": exc.msg})
+    except Exception as exc:  # noqa: BLE001  (VaultError)
+        if hasattr(exc, "code") and hasattr(exc, "msg"):
+            return h.send(exc.code, {"error": exc.msg})
+        raise
     except ValueError:
         return h.send(400, {"error": "bad number"})
     return h.send(404, {"error": "no such export"})

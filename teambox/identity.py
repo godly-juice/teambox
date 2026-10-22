@@ -1,7 +1,8 @@
-"""Who is asking. Identity = the Cloudflare Access email header, trusted ONLY when the TCP peer is the local cloudflared
-(trusted_proxy_ips, default 127.0.0.1/::1). Optional, recommended on the real box: verify the Access JWT
-(Cf-Access-Jwt-Assertion, RS256) against the team domain's public keys, so a local process that forges the header gets nothing.
-Dev mode (config dev_mode=true, local testing only): X-Dev-Email header or dev_email cookie."""
+"""Who is asking. Since 2026-10-21 (Marjus dropped the Cloudflare Access email check) identity = the team box's OWN sign-in session
+(auth.py: invite code -> PIN). Requests are still accepted only from the local cloudflared (trusted_proxy_ips, default 127.0.0.1/::1).
+Cloudflare Access can be switched back on as an extra OUTER lock (config access.enabled; the RS256 Access JWT is verified against the
+team domain's public keys when access.team_domain is set) - it never decides who you are.
+Dev mode (config dev_mode=true + env TEAMBOX_ALLOW_DEV=1, local testing only): X-Dev-Email header or dev_email cookie."""
 import base64
 import hashlib
 import hmac
@@ -100,39 +101,53 @@ def cookie(headers, name):
     return None
 
 
-def resolve(cfg, client_ip, headers):
-    """-> (email, None) or (None, reason). Never raises."""
-    if cfg.get("dev_mode"):
-        e = (headers.get("X-Dev-Email") or cookie(headers, "dev_email") or "").strip().lower()
-        e = urllib.request.unquote(e)
-        if e:
-            return _allowed(cfg, e)
-    if client_ip not in cfg["trusted_proxy_ips"]:
-        return None, "requests are only accepted through the team box's own Cloudflare tunnel"
-    email = (headers.get("Cf-Access-Authenticated-User-Email") or "").strip().lower()
+def client_ip(cfg, peer, headers):
+    """The address used for brute-force limits: Cloudflare's CF-Connecting-IP when the TCP peer is the local cloudflared, else the peer."""
+    if peer in cfg["trusted_proxy_ips"]:
+        cf = (headers.get("CF-Connecting-IP") or "").strip()
+        if cf and len(cf) <= 64 and all(ch in "0123456789abcdefABCDEF.:" for ch in cf):
+            return cf
+    return peer
+
+
+def access_lock(cfg, peer, headers):
+    """OPTIONAL OUTER LOCK (config access.enabled, off by default since 2026-10-21): when on, a request must ALSO carry a valid
+    Cloudflare Access login (the RS256 token is verified when access.team_domain is set). It never decides WHO you are - that is
+    always the app's own sign-in. -> None when allowed, else the reason."""
     acc = cfg.get("access") or {}
+    if not acc.get("enabled"):
+        return None
+    if peer not in cfg["trusted_proxy_ips"]:
+        return "requests are only accepted through the team box's own Cloudflare tunnel"
     jwt = headers.get("Cf-Access-Jwt-Assertion") or cookie(headers, "CF_Authorization") or ""
     if acc.get("team_domain") or acc.get("require_jwt"):
         if not jwt:
-            return None, "no Cloudflare Access token - sign in through team.xseed.ing"
+            return "no Cloudflare Access token - open the site through team.xseed.ing"
         jemail, why = verify_access_jwt(jwt, acc)
-        if not jemail:
-            return None, why
-        if email and email != jemail:
-            return None, "the Access email header does not match the Access token"
-        email = jemail
-    if not email:
-        return None, "no Cloudflare Access email - sign in through team.xseed.ing"
-    return _allowed(cfg, email)
+        return None if jemail else why
+    if not (headers.get("Cf-Access-Authenticated-User-Email") or "").strip():
+        return "no Cloudflare Access login - open the site through team.xseed.ing"
+    return None
 
 
-def _allowed(cfg, email):
-    if not S.EMAIL_RX.match(email):
-        return None, "that does not look like an email address"
-    if cfg["member_emails"] and email not in cfg["member_emails"] and email not in cfg["admin_emails"]:
-        return None, "%s is not on the team list" % email
-    return email, None
+def resolve(cfg, auth, peer, headers):
+    """WHO is asking -> ({"email": account id, "account": account or None, "via": "session"|"dev"}, None) or (None, reason).
+    Identity = the team box's own sign-in session (cookie tb_session). The Cloudflare Access email header is NOT an identity any more.
+    Dev mode (tests/screenshots only): X-Dev-Email header or dev_email cookie. Never raises."""
+    if cfg.get("dev_mode"):
+        e = urllib.request.unquote((headers.get("X-Dev-Email") or cookie(headers, "dev_email") or "").strip().lower())
+        if e:
+            if not S.EMAIL_RX.match(e):
+                return None, "that does not look like an account id"
+            return {"email": e, "account": auth.account(e), "via": "dev"}, None
+    if peer not in cfg["trusted_proxy_ips"]:
+        return None, "requests are only accepted through the team box's own Cloudflare tunnel"
+    a, why = auth.session(cookie(headers, "tb_session"))
+    if not a:
+        return None, why
+    return {"email": a["id"], "account": a, "via": "session"}, None
 
 
-def is_admin(cfg, email):
-    return bool(email) and email.lower() in cfg["admin_emails"]
+def is_admin(cfg, email, account=None):
+    """Admins: accounts with role admin (made with  python3 -m teambox.auth admin-invite), plus any id listed in admin_emails."""
+    return bool(email) and (email.lower() in cfg["admin_emails"] or bool(account and account.get("role") == "admin"))

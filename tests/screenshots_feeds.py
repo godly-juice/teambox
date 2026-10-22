@@ -1,6 +1,6 @@
-"""Dev tool: screenshots of the home feed + weekly team feed (fake gateway/model, temp data, headless chromium).
-    python3 tests/screenshots_feeds.py <out_dir>
-Never touches a real model or the real box. The Tuesday publish is simulated with the team feed's tick(now=...)."""
+"""Dev tool: screenshots of the home feed, Share to feed, sign-in/join, admin invites, Lumi's welcome and the vault (fake
+gateway/model, temp data, headless chromium).   python3 tests/screenshots_feeds.py <out_dir>
+Never touches a real model or the real box."""
 import json
 import os
 import struct
@@ -42,10 +42,10 @@ def main(out):
     open(sf, "w").write("sec")
     lp = free_port()
     llama = subprocess.Popen([sys.executable, os.path.join(HERE, "fake_llama.py"), "--port", str(lp), "--tps", "60"])
-    gw = FakeGateway("sec", [A, BEN, ADMIN], lp)
+    gw = FakeGateway("sec", [A, BEN, ADMIN, "liri-hoxha@team.xseed.ing"], lp)
     port = free_port()
     cp = os.path.join(tmp, "c.json")
-    json.dump({"port": port, "data_dir": os.path.join(tmp, "data"), "public_url": "https://team.xseed.ing", "admin_emails": [ADMIN], "dev_mode": True,
+    json.dump({"port": port, "data_dir": os.path.join(tmp, "data"), "public_url": "https://team.xseed.ing", "admin_emails": [ADMIN], "dev_mode": True, "welcome": {"model": "chat-llama"},
                "gateway": {"url": "http://127.0.0.1:%d" % gw.port, "secret_file": sf}, "jail": {"memory_mb": 512, "timeout_s": 20}}, open(cp, "w"))
     app, srv = make_server(C.load(cp))
     threading.Thread(target=srv.serve_forever, daemon=True).start()
@@ -66,26 +66,34 @@ def main(out):
     api("POST", "/api/profile", ADMIN, {"display_name": "Marjus"})
     for who in (A, BEN, ADMIN):
         api("POST", "/api/tour", who, {"seen": True})
-    # Ana's work this week (private until Tuesday)
+    # Ana's work: private until she presses "Share to feed"
     b = api("POST", "/api/builds", A, {"sandbox": "my-sandbox", "task": "NORMAL: add an add() function with a unit test", "model": "builder-bot"})["build"]["id"]
     for _ in range(100):
         if api("GET", "/api/builds/" + b, A)["status"] not in ("running", "testing"):
             break
         time.sleep(0.3)
     api("POST", "/api/builds/%s/apply" % b, A)
-    api("POST", "/api/versions", A, {"model": "chat-llama", "name": "Short answers", "settings": {"system_prompt": "Answer in one sentence.", "temperature": 0.2}})
+    v = api("POST", "/api/versions", A, {"model": "chat-llama", "name": "Short answers", "settings": {"system_prompt": "Answer in one sentence.", "temperature": 0.2}})
     api("POST", "/api/sandboxes", A, {"name": "weather-bot", "label": "Weather bot"})
-    tf = app.ext["team-feed"]
-    tf.tick(tf.next_slot(time.time()).timestamp() + 600)                 # simulate: it is now Tuesday 14:10
-    wk = api("GET", "/api/m/team-feed/weeks", BEN)["weeks"][0]["key"]
-    items = api("GET", "/api/m/team-feed/items?week=" + wk, BEN)["items"]
-    bi = next(i for i in items if i["type"] == "build")["id"]
-    api("POST", "/api/m/team-feed/comment", BEN, {"item": bi, "text": "Nice and small. Could add() also take floats?"})
-    api("POST", "/api/m/team-feed/comment", A, {"item": bi, "text": "Yes - next week."})
-    api("POST", "/api/m/team-feed/react", BEN, {"item": bi, "emoji": "\U0001F525"})
-    api("POST", "/api/m/team-feed/react", ADMIN, {"item": bi, "emoji": "\U0001F44D"})
-    # Ana's next work: pending for next Tuesday
-    api("POST", "/api/versions", A, {"model": "chat-llama", "name": "Pirate", "settings": {"system_prompt": "Talk like a pirate."}})
+    sp = api("POST", "/api/m/feed/share", A, {"kind": "build", "build": b, "text": "My first AI build - add() with a test. Feedback welcome!"})["post"]["id"]
+    api("POST", "/api/m/feed/share", A, {"kind": "version", "model": "chat-llama", "version": v["version"]["id"]})
+    api("POST", "/api/m/feed/comment", BEN, {"post": sp, "text": "Nice and small. Could add() also take floats?"})
+    api("POST", "/api/m/feed/comment", A, {"post": sp, "text": "Yes, next."})
+    api("POST", "/api/m/feed/react", BEN, {"post": sp, "emoji": "\U0001F525"})
+    api("POST", "/api/m/feed/react", ADMIN, {"post": sp, "emoji": "\U0001F44D"})
+    # an invited account (Lumi's welcome) + open invites for the admin page
+    from teambox import welcome as W
+    inv, code = app.auth.create_invite("Liri Hoxha", "build the sales dashboard for our shop", "+14025550188", "liri@example.com", by="lumi")
+    ticket = app.auth.redeem(code, "203.0.113.5")[1]
+    acc, _tok = app.auth.complete_setup(ticket, "liri", "58203917", "203.0.113.5")
+    ls = app.store.slug_for(acc["id"])
+    pr = app.store.ensure_profile(ls, acc["id"])
+    pr.update(display_name="Liri", setup={"vault_later": True, "profile": "skipped"})
+    app.store.save_profile(ls, pr)
+    W.ensure_first_project(app, ls, acc["purpose"])
+    wc = W.start(app, ls, acc["id"])
+    app.auth.create_invite("Dren Krasniqi", "test the mobile app and report bugs", None, "dren@example.com", by="lumi")
+    LIRI = acc["id"]
     # home feed posts
     p1 = api("POST", "/api/m/feed/posts", BEN, {"text": "Scores from Saturday's test run - spreadsheet attached. Notes in the .md.",
                                                 "attachments": [up(BEN, "scores.csv", b"member,builds,tests passing\nAna,3,3\nBen,2,1\nLiri,4,4\n"),
@@ -100,15 +108,17 @@ def main(out):
     shots = [
         ("01-home-feed-phone-light", A, "/", "390,2600", 1), ("02-home-feed-phone-dark", A, "/", "390,2600", 0),
         ("03-home-feed-desktop-light", BEN, "/", "1280,1900", 1), ("04-home-feed-desktop-dark", BEN, "/#/m/feed", "1280,1900", 0),
-        ("05-team-feed-desktop-light", BEN, "/#/m/team-feed", "1280,1200", 1), ("06-team-feed-phone-dark", A, "/#/m/team-feed", "390,1700", 0),
-        ("07-team-feed-build-desktop-dark", BEN, "/#/m/team-feed/item/" + bi, "1280,2200", 0),
-        ("08-team-feed-build-phone-light", BEN, "/#/m/team-feed/item/" + bi, "390,3000", 1),
-        ("09-team-feed-admin-desktop-light", ADMIN, "/#/m/team-feed", "1280,1300", 1),
+        ("05-project-share-button-phone-light", A, "/#/project/%s/my-sandbox" % api("GET", "/api/me", A)["id"], "390,1500", 1),
+        ("06-build-share-desktop-dark", A, "/#/build/" + b, "1280,1400", 0),
+        ("07-signin-phone-light", None, "/", "390,900", 1), ("08-join-phone-dark", None, "/join", "390,900", 0),
+        ("09-admin-invites-desktop-light", ADMIN, "/#/admin/invites", "1280,1400", 1),
+        ("12-lumi-welcome-phone-light", LIRI, "/#/chat/" + wc["id"], "390,1600", 1),
+        ("13-vault-locked-phone-dark", LIRI, "/#/vault", "390,900", 0),
         ("10-tour-phone-light", A, "/#/tour", "390,3600", 1), ("11-how-it-works-desktop-dark", A, "/how-it-works", "1280,4200", 0),
     ]
     for name, who, path, size, light in shots:
         ud = tempfile.mkdtemp(prefix="chr-")
-        url = "%s/dev/login?email=%s&next=%s" % (base, urllib.request.quote(who), urllib.request.quote(path, safe=""))
+        url = ("%s/dev/login?email=%s&next=%s" % (base, urllib.request.quote(who), urllib.request.quote(path, safe=""))) if who else base + path
         subprocess.run(["chromium", "--headless=new", "--disable-gpu", "--no-first-run", "--user-data-dir=" + ud, "--hide-scrollbars",
                         "--window-size=" + size, "--virtual-time-budget=8000", "--blink-settings=preferredColorScheme=%d" % light,
                         "--screenshot=" + os.path.join(out, name + ".png"), url], capture_output=True, timeout=180)

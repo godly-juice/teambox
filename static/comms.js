@@ -109,6 +109,7 @@
     Object.keys(th.keys).forEach(function (m) { th.keys[m].forEach(function (k) { out.push({ to: m, kid: k.kid, spki: k.spki }); }); });
     return out;
   }
+  TB.cryptoLib = { b64: b64, unb64: unb64, hex: hex, rand: rand, kidOf: kidOf, pub: pub, checkLumi: checkLumi, fp: fp, kb: kb };   // reused by vault.js
   async function uploadAtt(file, ck, tid, progress) {
     var buf = new Uint8Array(await file.arrayBuffer());
     if (!buf.length) throw new Error((file.name || "the file") + " is empty");

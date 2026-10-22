@@ -36,10 +36,18 @@ sudo chown root:teambox /etc/teambox/config.json && sudo chmod 0640 /etc/teambox
 sudo nano /etc/teambox/config.json
 ```
 Fill in:
-- `admin_emails`: Marjus's Access email(s). Admins can do everything, including promote.
-- `access.team_domain` and `access.aud`: from the Access application (step 5). Keep `require_jwt: true`, so that a forged email header from any local process gives nothing.
+- `access.enabled`: keep **`false`**. Since 2026-10-21 members sign in with the app's own login (invite code -> PIN, see 3b);
+  Cloudflare Access is no longer the identity. `access.enabled: true` turns Access back on as an extra OUTER lock in front of that
+  login (then also fill in `access.team_domain`/`access.aud`, keep `require_jwt: true`, and see section 5). **`require_jwt` on its own
+  does nothing any more** - only `enabled` switches the outer lock on.
+- `admin_emails`: optional, normally empty. Admins are the accounts made with `admin-invite` (3b).
+- `auth`: optional sign-in limits (defaults: invite codes valid 48 h, 5 wrong codes lock an invite, PIN >= 6 digits, 5 wrong PINs lock
+  the account 15 min (doubling), 20 wrong tries per IP in 15 min block it 30 min, sessions end after 240 idle minutes / 72 hours,
+  `cookie_secure: true`). Keep `cookie_secure: true` behind the tunnel (the site is HTTPS).
 - `gateway.url`: `http://<BESNIK LAN IP>:11540`.
 - `gateway.secret_file`: `/etc/teambox/gateway.secret`.
+- `welcome.model`: optional - which shared model Lumi's welcome chat uses (default: `builds.default_model`, else the first shared model).
+  The welcome text template is `config/templates/lumi-welcome.txt` (plus `lumi-welcome-fallback.txt` when no model answers).
 - Keep `dev_mode: false`. The app refuses to start in dev mode unless `TEAMBOX_ALLOW_DEV=1` is set; never set it on this box.
 
 Copy the gateway secret over **by hand**, e.g. on a USB stick or by typing it. It is the content of `D:\Atlas\memory\team-gateway.secret` on BESNIK.
@@ -47,11 +55,31 @@ Copy the gateway secret over **by hand**, e.g. on a USB stick or by typing it. I
 sudo install -o root -g teambox -m 0640 /dev/stdin /etc/teambox/gateway.secret    # paste, then Ctrl-D
 ```
 
+## 3b. The admin account (Marjus) and Lumi's invite token
+
+Run these on the box as the `teambox` user (they write into the data dir). Both print nothing secret except the admin's one-time code:
+```sh
+# Marjus's admin account: prints a one-time 12-digit code (48 h, works once). He opens https://team.xseed.ing/join, types it,
+# chooses his sign-in name + PIN + vault password. Run it again any time to make another admin invite.
+cd /opt/teambox && sudo -u teambox python3 -m teambox.auth --config /etc/teambox/config.json admin-invite --name Marjus
+#   on xOS (Alpine + runit, no sudo):  cd /opt/teambox && chpst -u teambox python3 -m teambox.auth --config /etc/teambox/config.json admin-invite --name Marjus
+
+# Lumi's admin API token for the invite API (POST/GET /api/admin/invites, revoke). Written to the file (0600), never printed:
+cd /opt/teambox && sudo -u teambox python3 -m teambox.auth --config /etc/teambox/config.json new-api-token --out /tmp/invite-api.token   # xOS: chpst -u teambox
+# copy /tmp/invite-api.token WHOLE to BESNIK as D:\Atlas\memory\teambox-invite\api-token.txt (USB stick), then: shred -u /tmp/invite-api.token
+```
+Other admin commands: `list` (accounts + invites, no secrets), `unlock <sign-in name or account id>`, `signout-all <...>`.
+The API token reaches ONLY the invite endpoints. The box keeps its sha256. Members' invites are made by Lumi (or on the
+"Admin: invites & accounts" page); an invite made through the API is always a member invite - admin invites only come from the CLI.
+Keep `/var/lib/teambox/auth/pepper` with the data backup: without it no PIN and no invite code can be checked.
+
 ## 4. BESNIK side (team gateway). Only Marjus or the Director does this, in Lumi Control / team-gateway.json:
 - In `D:\Atlas\memory\team-gateway.json`, set `"use_lan": true`, set `"lan_bind": "<BESNIK LAN IP>"`, and add the team box's LAN IP to `allow_ips`. Then restart the gateway the usual way (explorer.exe).
-- In Lumi Control → Router settings, add each team member's **Access email** as an account, with their caps and allowed models. The team box sends `X-Team-Account = <member's email>`.
+- In Lumi Control -> Router settings, add each team member's **account id** as an account, with their caps and allowed models. The team
+  box sends `X-Team-Account = <account id>`; account ids look like `ana@team.xseed.ing` (made from the invite's name; the invite API's
+  answer and the Admin page show it).
 - Share the models that the team may use.
-- Admins come through the gateway too, but the gateway refuses the owner's own account by design (`admin_not_via_gateway`). To chat or build on the team box, Marjus needs a separate team account (e.g. a second email), or he uses BESNIK's own admin portal.
+- Admins come through the gateway too, but the gateway refuses the owner's own account by design (`admin_not_via_gateway`). To chat or build on the team box, Marjus needs a separate team account, or he uses BESNIK's own admin portal.
 - Firewall: BESNIK should accept 11540 only from the team box's IP.
 
 ## 5. Cloudflare: the team box's own tunnel + Access
@@ -64,14 +92,14 @@ sudo cp /opt/teambox/systemd/teambox.yml.example /etc/cloudflared/teambox.yml   
 - **DNS:** `team.xseed.ing` currently points at **BESNIK's** tunnel (TEAM-PORTAL-REPORT). Move it only when the box is ready:
   `cloudflared tunnel route dns --overwrite-dns teambox team.xseed.ing`. Then remove the `team.xseed.ing` ingress lines from BESNIK's
   `tunnel-config.yml` and restart BESNIK's cloudflared the safe way (Director, with Marjus's OK).
-- **Access applications** (Zero Trust → Access → Applications):
-  1. `team.xseed.ing` (whole host): an email one-time-PIN login with an allow-list of team emails and Marjus. Copy its **AUD tag** into `access.aud`, and your `<team>.cloudflareaccess.com` into `access.team_domain`.
-  2. `team.xseed.ing/git` → policy **Bypass** (everyone). Git clients can not do a browser login; on this path the per-member token is the authentication.
-     (Without it, members need `cloudflared access login https://team.xseed.ing` plus a git credential helper. That is possible, but awkward.)
-  3. Optional: `team.xseed.ing/how-it-works` and `team.xseed.ing/api/public/` → **Bypass**, so that a member's own AI can read the public explanation.
-     `/static/` must then be bypassed as well (the page loads its CSS/JS from there).
+- **Cloudflare Access is OFF by default** (`access.enabled: false`): the app's own invite-code + PIN login is the sign-in. If no Access
+  application covers `team.xseed.ing`, nothing else is needed. If one exists from before, remove it (or set it to Bypass), otherwise
+  members get an email login they can not pass.
+- **Optional extra outer lock** (`access.enabled: true`): an Access application for `team.xseed.ing` (copy its **AUD tag** into
+  `access.aud`, `<team>.cloudflareaccess.com` into `access.team_domain`), plus **Bypass** on `team.xseed.ing/git` (git uses tokens),
+  and a **Service Auth** policy on `team.xseed.ing/api/admin/invites` and `team.xseed.ing/export` for BESNIK's scripts.
 
-## 6. systemd
+## 6. Services (systemd on Arch; on xOS = Alpine + runit, see TEAMBOX-INSTALL-REPORT.md: `/etc/service/teambox`)
 
 ```sh
 sudo cp /opt/teambox/systemd/teambox.service /opt/teambox/systemd/cloudflared-teambox.service /etc/systemd/system/
@@ -87,42 +115,30 @@ sudo systemctl enable --now cloudflared-teambox.service
 left off, because the `teambox` system user has no user manager. Turning it on would need `loginctl enable-linger teambox` plus
 `XDG_RUNTIME_DIR`. This has not been tested.
 
-## 6b. Feeds: the home feed uploads and the Tuesday 14:00 team feed
+## 6b. Home feed uploads
 
 Config: `"feeds"` in `/etc/teambox/config.json` (all optional; defaults in `config.example.json`):
-- `timezone` (default `America/Chicago`), `publish_weekday` (0 = Monday, so 1 = Tuesday), `publish_time` (`"14:00"`). The time is
-  computed in that timezone whatever the box's system clock zone is, and follows daylight saving (14:00 CDT = 19:00 UTC, 14:00 CST = 20:00 UTC).
-  The box needs the tz database: `pacman -S --needed tzdata` (normally already installed).
 - `max_file_mb` (95) per file and `member_quota_mb` (1000) per member. Cloudflare refuses request bodies over 100 MB on the Free/Pro plans,
   so do not raise `max_file_mb` above ~95 behind the tunnel. Uploads are streamed to disk, never held in memory.
-- Uploaded files live in `/var/lib/teambox/feed/files/` under random names (outside `/opt/teambox/static`), the team feed's read-only
-  copies in `/var/lib/teambox/team-feed/`. Both are covered by the normal backup of `/var/lib/teambox`. Watch the disk:
+- Uploaded files live in `/var/lib/teambox/feed/files/` under random names (outside `/opt/teambox/static`), the read-only copies made by
+  "Share to feed" in `/var/lib/teambox/feed/shared/`. Both are covered by the normal backup of `/var/lib/teambox`. Watch the disk:
   `du -sh /var/lib/teambox/feed`.
+- There is **no scheduled publishing** (removed 2026-10-21): work reaches the feed only when its owner presses "Share to feed".
 
-**The publish runs inside the app** (`"scheduler": true`, the default): a thread checks every `tick_s` seconds and once at start-up,
-so if the box was off at 14:00 it publishes as soon as `teambox.service` is back (the week is marked "published late"). Each Tuesday is
-recorded in `/var/lib/teambox/team-feed/publishes.json` and published once, under a thread lock and a file lock.
-
-**Optional: also (or instead) a systemd timer.** Safe to run next to the in-app scheduler, because of the same lock and record:
-```sh
-sudo cp /opt/teambox/systemd/teambox-feed.service /opt/teambox/systemd/teambox-feed.timer /etc/systemd/system/
-sudo systemctl daemon-reload && sudo systemctl enable --now teambox-feed.timer
-systemctl list-timers teambox-feed.timer                  # next run: Tue 14:00 America/Chicago (+ a no-op check every 15 min)
-sudo systemctl start teambox-feed.service && journalctl -u teambox-feed -n 5   # {"published": null, "next": "..."} when nothing is due
-```
-If you change `feeds.timezone`/`publish_time`, change `OnCalendar=` in the timer too (or rely on the 15-minute check). To use only the
-timer, set `"scheduler": false`.
-
-Testing it without waiting for Tuesday: an admin opens Team feed → "Publish now" (labelled "Early publish" in the feed; the next Tuesday
-publishes only what is new). The test suite simulates the clock: `python3 -m unittest -v tests.test_feeds`.
+**Upgrading a box that ran the older version (scheduled team feed):** remove its service - on xOS/runit
+`rm /etc/service/teambox-feed` (then `sv status teambox-feed` says it is gone); on systemd `systemctl disable --now teambox-feed.timer`
+and delete both unit files. Old `/var/lib/teambox/team-feed/` data is no longer read; delete it or keep it as an archive.
 
 ## 7. Check from outside (after DNS moves)
-1. In a private window, open `https://team.xseed.ing`. You should get the Access email login, then the tour on first visit.
-2. Open `https://team.xseed.ing/how-it-works`. This is the public page.
-3. Sign in as a member and go to Your caps. You should see the gateway's numbers. If you see "could not be reached" instead, check the LAN, the BESNIK `allow_ips` and the secret.
-4. Profile → make a token, then `git clone https://team.xseed.ing/git/<id>/my-sandbox.git` (the password is the token), commit, and push. The build shows **tests pass**.
-5. Home: post something with a picture and a csv; a teammate sees it, comments and reacts. Team feed: "Your work that goes out next time" lists your build.
-6. Run the self-test on the box: `cd /opt/teambox && sudo -u teambox env PATH=/usr/bin python3 -m unittest tests.test_teambox tests.test_feeds`. It uses its own temporary folder and fake models, and switches dev mode on only inside its own test process.
+1. In a private window, open `https://team.xseed.ing`. You should get the team box's own sign-in page (no Cloudflare email login).
+2. Open `https://team.xseed.ing/join`, type the admin code from 3b, choose a sign-in name, PIN and vault password, skip the profile;
+   you land in Lumi's welcome chat and your first project exists.
+3. Open `https://team.xseed.ing/how-it-works`. This is the public page.
+4. Go to Your caps. You should see the gateway's numbers. If you see "could not be reached" instead, check the LAN, the BESNIK `allow_ips` and the secret.
+5. Profile -> make a token, then `git clone https://team.xseed.ing/git/<id>/<project>.git` (the password is the token), commit, and push. The build shows **tests pass**.
+6. Home: post something with a picture and a csv; a teammate sees it, comments and reacts. On a build press "Share to feed": the
+   teammate sees the read-only copy; "Unshare" removes it.
+7. Run the self-test on the box: `cd /opt/teambox && sudo -u teambox env PATH=/usr/bin python3 -m unittest tests.test_teambox tests.test_feeds tests.test_auth`. It uses its own temporary folder and fake models, and switches dev mode on only inside its own test process.
 
 ## 8. Messages & calls (Lumi's key, the export door, TURN)
 
@@ -138,8 +154,8 @@ It writes `D:\Atlas\memory\lumi-comms\` (ACL: the normal user only) with `lumi-c
 Back the folder up offline (USB stick in a drawer): if the private key is lost, Lumi can never read the old messages again.
 
 **b. The box's config:** paste the printed `lumi_public_key`, `lumi_kid` and `export_token_sha256` into `comms` in
-`/etc/teambox/config.json`, then `sudo systemctl restart teambox`. Publish the fingerprint to the team (for example in the Tuesday
-feed): every member's Messages page shows "Lumi's key: xxxx xxxx xxxx xxxx", and the browser warns if it ever changes.
+`/etc/teambox/config.json`, then restart the app (`sv restart teambox` on xOS). Publish the fingerprint to the team (for example in a home
+feed post): every member's Messages page shows "Lumi's key: xxxx xxxx xxxx xxxx", and the browser warns if it ever changes.
 
 **c. The export door (BESNIK pulls ciphertext):** the review script calls `https://team.xseed.ing/export/comms` with
 `Authorization: Bearer <export token>`. The box keeps only the token's sha256 and hands out ciphertext + Lumi's wrapped key +
@@ -183,10 +199,13 @@ The box hands each member short-lived TURN credentials (`comms.turn.ttl_s`, cotu
 The `denied-peer-ip` lines stop the relay from being used to reach the LAN (and so BESNIK). Without TURN, calls work only when both
 browsers can reach each other directly (same LAN, most home routers with STUN).
 
+**f. The vault export:** the same export token also reads `https://team.xseed.ing/export/vault?cursor=N` (members' vault items:
+ciphertext + Lumi's wrapped key only) and `/export/vault/blob?member=&id=&i=` (file chunks). Lumi's review script does not read it yet.
+
 **e. Limits that stay:** calls are a mesh, so 4 people at most (`comms.max_call`). Bigger group calls need an SFU (e.g. LiveKit or
 mediasoup) - not built. The recording is made by the caller's browser: a modified browser could skip it. Everyone in the call then sees
 "no recording has reached the team box yet", and the admin page lists the call as "NO recording received".
 
 ## Updating / backup
-- Code: `cd /opt/teambox && sudo git pull && sudo systemctl restart teambox`. When it restarts, any running build is marked "interrupted".
-- Data: everything is under `/var/lib/teambox` (members, sandboxes, builds, team-main, tokens-index). Back it up as one folder.
+- Code: `cd /opt/teambox && sudo git pull` and restart the app (`sv restart teambox` on xOS, `systemctl restart teambox` on systemd). When it restarts, any running build is marked "interrupted".
+- Data: everything is under `/var/lib/teambox` (accounts + pepper in `auth/`, members, sandboxes, builds, vault, feed, team-main, tokens-index). Back it up as one folder.

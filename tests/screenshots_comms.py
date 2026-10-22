@@ -110,7 +110,7 @@ def main(out):
             api("POST", M + "/send", who, {"thread": tid, "env": env, "att": [x["blob"] for x in att or []]})
 
         say(BEN, t1, "Hi Ana! Did the parser tests pass in the jail?")
-        say(ANA, t1, "Yes - all green. I'll post it in Tuesday's feed so everyone can vote on it.")
+        say(ANA, t1, "Yes - all green. I'll share it to the feed so everyone can vote on it.")
         ck = K.AESGCM.generate_key(256)
         img = png(320, 180)
         bid = api("POST", M + "/blob/start", BEN, {"kind": "att", "thread": t1})["blob"]["id"]
