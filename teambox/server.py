@@ -96,6 +96,7 @@ class App:
         r("POST", "/api/chats", self.chat_new)
         r("GET", r"/api/chats/([0-9a-z-]+)", self.chat_get)
         r("POST", r"/api/chats/([0-9a-z-]+)/send", self.chat_send)
+        r("POST", r"/api/chats/([0-9a-z-]+)/version", self.chat_version_set)
         r("GET", "/api/tokens", self.tokens_list)
         r("POST", "/api/tokens", self.token_create)
         r("POST", r"/api/tokens/([0-9a-f]+)/revoke", self.token_revoke)
@@ -419,6 +420,19 @@ class App:
             raise HttpError(400, "no such settings version")
         return v["settings"]
 
+    def chat_version_info(self, slug, c):
+        """The chat's settings version as the page shows it: (name, missing). missing = the version was deleted after the chat was made."""
+        vid = c.get("version") or "original"
+        if vid == "original":
+            return "Original", False
+        v = next((x for x in self.store.versions(slug).get(c.get("model") or "", []) if x["id"] == vid), None)
+        return (v["name"], False) if v else (None, True)
+
+    def chat_view(self, slug, c):
+        name, missing = self.chat_version_info(slug, c)
+        return {"chat": c, "version_name": name or "Original", "version_missing": missing,
+                "versions": [{"id": "original", "name": "Original"}] + [{"id": x["id"], "name": x["name"]} for x in self.store.versions(slug).get(c.get("model") or "", [])]}
+
     # ------------------------------------------------------------------ chats
     def chat_new(self, q):
         model = str(q.body.get("model") or "")
@@ -432,7 +446,21 @@ class App:
         c = self.store.chat(q.slug, cid)                           # a member's own chats only - path is their own folder
         if not c:
             raise HttpError(404, "no such chat")
-        return 200, {"chat": c}
+        return 200, self.chat_view(q.slug, c)
+
+    def chat_version_set(self, q, cid):
+        """The member picks the settings version for an existing chat (e.g. after the one it used was deleted)."""
+        c = self.store.chat(q.slug, cid)
+        if not c:
+            raise HttpError(404, "no such chat")
+        vid = str(q.body.get("version") or "original")
+        self.settings_for(q.slug, c["model"], vid)                  # 400 "no such settings version" for an unknown id
+        if vid != (c.get("version") or "original"):
+            c["version"] = vid
+            name, _ = self.chat_version_info(q.slug, c)
+            c["messages"].append({"role": "notice", "content": "Settings version for this chat: %s (from your next message on)." % name, "at": S.now_s()})
+            self.store.save_chat(q.slug, c)
+        return 200, self.chat_view(q.slug, c)
 
     def chat_send(self, q, cid):
         c = self.store.chat(q.slug, cid)
@@ -443,6 +471,12 @@ class App:
             raise HttpError(400, "say something")
         if len(c["messages"]) >= int(self.cfg["limits"]["chat_messages_max"]):
             raise HttpError(409, "this chat is full - start a new one")
+        fallback = False
+        if self.chat_version_info(q.slug, c)[1]:                     # its settings version was deleted: never a dead chat - fall back to Original, say so
+            c["version"] = "original"
+            c["messages"].append({"role": "notice", "content": "The settings version this chat used was deleted, so this chat now uses Original "
+                                  "(the model's own settings). You can pick another version at the top of the chat.", "at": S.now_s()})
+            fallback = True
         st = dict(self.settings_for(q.slug, c["model"], c.get("version")))
         if c.get("system_prompt") and not st.get("system_prompt"):        # Lumi's welcome chat keeps its system prompt
             st["system_prompt"] = c["system_prompt"]
@@ -465,10 +499,10 @@ class App:
             if c["title"] == "New chat":
                 c["title"] = text[:60]
             self.store.save_chat(q.slug, c)
-            return 200, {"chat": c, "answer": ans}
+            return 200, dict(self.chat_view(q.slug, c), answer=ans, version_fallback=fallback)
         c["messages"].append({"role": "notice", "content": "Not sent to the model: %s" % why, "at": S.now_s()})
         self.store.save_chat(q.slug, c)
-        return 200, {"chat": c, "refused": why, "status": status}
+        return 200, dict(self.chat_view(q.slug, c), refused=why, status=status, version_fallback=fallback)
 
     # ------------------------------------------------------------------ git tokens
     def tokens_list(self, q):

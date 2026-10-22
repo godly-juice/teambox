@@ -561,6 +561,49 @@ class TeamBoxTest(unittest.TestCase):
         self.assertIn(c["chat"]["id"], [x["id"] for x in self.api("GET", "/api/chats", A)[1]["chats"]], "chat saved under the profile")
         print("\n  versions: Original always first, undeletable, name reserved; 'Pirate' applied (system prompt, temp 0.2, 50 tokens); answer: %r" % r["answer"][:40])
 
+    def test_52_deleted_version_chat_falls_back_to_original(self):
+        """Button check 2026-10-21: a chat tied to a deleted settings version could never send again (every Send = 400)."""
+        s, j = self.api("POST", "/api/versions", A, {"model": "chat-llama", "name": "Shortlived", "settings": {"system_prompt": "Be brief.", "temperature": 0.3}})
+        self.assertEqual(s, 200, j)
+        vid = j["version"]["id"]
+        s, c = self.api("POST", "/api/chats", A, {"model": "chat-llama", "version": vid})
+        cid = c["chat"]["id"]
+        s, g = self.api("GET", "/api/chats/" + cid, A)
+        self.assertEqual((s, g["version_name"], g["version_missing"]), (200, "Shortlived", False), g)
+        s, d = self.api("POST", "/api/versions/delete", A, {"model": "chat-llama", "id": vid})
+        self.assertEqual((s, d.get("ok")), (200, True), d)
+        s, g = self.api("GET", "/api/chats/" + cid, A)
+        self.assertEqual(s, 200, g)
+        self.assertTrue(g["version_missing"], "the page is told the version is gone (it shows the note)")
+        self.assertEqual(g["versions"][0], {"id": "original", "name": "Original"}, "the picker always offers Original")
+        n0 = len(self.gw.calls)
+        s, r = self.api("POST", "/api/chats/%s/send" % cid, A, {"text": "still there?"})
+        self.assertEqual(s, 200, "the chat can send again (was 400 'no such settings version')")
+        self.assertTrue(r.get("answer"), r)
+        self.assertTrue(r["version_fallback"])
+        self.assertEqual((r["chat"]["version"], r["version_name"], r["version_missing"]), ("original", "Original", False))
+        notes = [m["content"] for m in r["chat"]["messages"] if m["role"] == "notice"]
+        self.assertTrue(any("was deleted" in n and "Original" in n for n in notes), notes)
+        call = [x for x in self.gw.calls[n0:] if x["path"] == "/v1/chat/completions"][0]
+        self.assertEqual(call["body"]["messages"][0]["role"], "user", "Original = no system prompt from the deleted version")
+        self.assertNotIn("temperature", call["body"])
+        self.assertNotIn("notice", [m["role"] for m in call["body"]["messages"]], "the note is never sent to the model")
+        s, r2 = self.api("POST", "/api/chats/%s/send" % cid, A, {"text": "again"})
+        self.assertEqual((s, r2["version_fallback"]), (200, False), "the note is written once")
+        # the member can pick a version for the chat
+        s, j = self.api("POST", "/api/versions", A, {"model": "chat-llama", "name": "Formal", "settings": {"system_prompt": "Be formal."}})
+        v2 = j["version"]["id"]
+        s, p = self.api("POST", "/api/chats/%s/version" % cid, A, {"version": "nope"})
+        self.assertEqual(s, 400, "an unknown version is refused")
+        s, p = self.api("POST", "/api/chats/%s/version" % cid, A, {"version": v2})
+        self.assertEqual((s, p["chat"]["version"], p["version_name"]), (200, v2, "Formal"), p)
+        self.assertEqual(self.api("POST", "/api/chats/%s/version" % cid, B, {"version": "original"})[0], 404, "B can not change A's chat")
+        n1 = len(self.gw.calls)
+        self.api("POST", "/api/chats/%s/send" % cid, A, {"text": "and now?"})
+        call = [x for x in self.gw.calls[n1:] if x["path"] == "/v1/chat/completions"][0]
+        self.assertEqual(call["body"]["messages"][0], {"role": "system", "content": "Be formal."})
+        print("\n  deleted settings version: chat falls back to Original with a note, sends again; member picked 'Formal' for it")
+
     def test_51_gateway_refusal_shown_plainly(self):
         s, j = self.api("POST", "/api/models/start", A, {"model": "big-model"})
         self.assertEqual(s, 200)

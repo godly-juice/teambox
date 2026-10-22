@@ -293,16 +293,31 @@
   function vChat(id) {
     api("GET", "/api/chats/" + id).then(function (r) {
       var c = r.chat, box = h("div"), input = h("textarea", { id: "chatInput", placeholder: "Message" }), btn;
+      // settings version of this chat: shown, changeable, and a plain note when the one it used was deleted (the next message then uses Original)
+      var verLine = h("p", { class: "muted" }), verNote = h("div"), verSel = h("select", { id: "chatVersion", "aria-label": "Settings version for this chat" });
+      function paintVer(v) {
+        verLine.textContent = "Model: " + c.model + " - settings version: " + (v.version_name || "Original") + " - saved under your profile";
+        verNote.textContent = "";
+        if (v.version_missing) verNote.appendChild(h("div", { class: "err", text: "The settings version this chat used was deleted. Your next message will use Original (the model's own settings) - or pick another version below." }));
+        verSel.textContent = "";
+        (v.versions || [{ id: "original", name: "Original" }]).forEach(function (x) {
+          var o = h("option", { value: x.id, text: x.name }); if (x.id === (v.version_missing ? "original" : (c.version || "original"))) o.selected = true; verSel.appendChild(o);
+        });
+      }
+      verSel.onchange = function () {
+        api("POST", "/api/chats/" + id + "/version", { version: verSel.value }).then(function (j) { c = j.chat; paintVer(j); paint(); }).catch(function (e) { verNote.textContent = ""; verNote.appendChild(err(e)); });
+      };
       function paint() { box.textContent = ""; c.messages.forEach(function (m) {
         box.appendChild(h("div", { class: "msg " + m.role }, m.lumi ? h("div", { class: "msg-head muted", text: "Lumi" }) : null, linkify(m.content)));
       }); }
       paint();
       btn = h("button", { onclick: function () {
         var t = input.value; if (!t.trim()) return; btn.disabled = true; btn.textContent = "Waiting for the model...";
-        api("POST", "/api/chats/" + id + "/send", { text: t }).then(function (j) { c = j.chat; input.value = ""; paint(); })
+        api("POST", "/api/chats/" + id + "/send", { text: t }).then(function (j) { c = j.chat; input.value = ""; paint(); if (j.versions) paintVer(j); })
           .catch(function (e) { box.appendChild(err(e)); }).then(function () { btn.disabled = false; btn.textContent = "Send"; });
       } }, "Send");
-      show(h("h1", { text: c.title }), h("p", { class: "muted", text: c.lumi ? "Lumi (Marjus's AI assistant) through the team's shared model " + c.model + ". Lumi never asks for your PIN or vault password. This chat is saved under your profile." : "Model: " + c.model + " - settings version: " + (c.version === "original" ? "Original" : c.version) + " - saved under your profile" }), box, h("label", { for: "chatInput", text: "Your message" }), input, h("div", { class: "row" }, btn, h("a", { href: "#/models", text: "Back" })));
+      if (c.lumi) show(h("h1", { text: c.title }), h("p", { class: "muted", text: "Lumi (Marjus's AI assistant) through the team's shared model " + c.model + ". Lumi never asks for your PIN or vault password. This chat is saved under your profile." }), box, h("label", { for: "chatInput", text: "Your message" }), input, h("div", { class: "row" }, btn, h("a", { href: "#/models", text: "Back" })));
+      else { paintVer(r); show(h("h1", { text: c.title }), verLine, verNote, h("div", { class: "row" }, h("label", { for: "chatVersion", text: "Settings version" }), verSel), box, h("label", { for: "chatInput", text: "Your message" }), input, h("div", { class: "row" }, btn, h("a", { href: "#/models", text: "Back" }))); }
     }).catch(function (e) { show(err(e)); });
   }
   // links in a chat message: only this site's own addresses and #/ routes become links; everything else stays text
