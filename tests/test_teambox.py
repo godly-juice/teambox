@@ -582,7 +582,10 @@ class TeamBoxTest(unittest.TestCase):
         for claim in ("Sandbox isolation", "The jail", "Git tokens", "Caps", "Who can promote", "encrypted at rest", "Not my computer", "can NOT", "PARTLY"):
             self.assertIn(claim, t["prompt"])
         self.assertIn("/how-it-works", t["prompt"])
-        self.assertIn("NOT LIVE YET", t["prompt"], "the prompt is honest about what is not built yet")
+        # Director merge 2026-10-21: feeds + messages are all live now, so the prompt must say LIVE for each and nothing is "not live yet"
+        for claim in ("9. Weekly team feed: LIVE", "10. Messages, calls and video calls with a must-accept monitoring notice: LIVE", "12. Home feed uploads: LIVE"):
+            self.assertIn(claim, t["prompt"], "the prompt states what is live")
+        self.assertNotIn("NOT LIVE YET", t["prompt"])
         self.api("POST", "/api/tour", "newbie@test.example", {"done": "sandboxes"})
         self.api("POST", "/api/tour", "newbie@test.example", {"done": "nonsense"})
         s, me = self.api("GET", "/api/me", "newbie@test.example")
@@ -624,8 +627,7 @@ class TeamBoxTest(unittest.TestCase):
     def test_63_modules_coming_soon(self):
         s, j = self.api("GET", "/api/modules", A)
         st = {m["id"]: m["status"] for m in j["modules"]}
-        self.assertEqual((st["feed"], st["team-feed"]), ("live", "live"), "the home feed and the team feed are built (tests/test_feeds.py)")
-        self.assertIn(st["messages"], ("coming soon", "live"))
+        self.assertEqual(st, {"feed": "live", "team-feed": "live", "messages": "live"}, "feeds (tests/test_feeds.py) and messages (comms) are built")
 
 
 if __name__ == "__main__":

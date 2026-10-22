@@ -35,7 +35,10 @@ CHECKPOINTS = [
              "versions - become visible to the whole team as read-only copies, with comments and emoji reactions. Until then your work "
              "is visible only to you and the admins."},
     {"id": "messages", "title": "Messages & calls (monitoring notice)", "link": "#/m/messages",
-     "text": "Messages, calls and video calls will live here. You must read and accept the team's monitoring notice before first use."},
+     "text": "Messages (1:1 and groups, with attachments), calls and video calls. First you read and accept the team's monitoring notice. "
+             "Messages are encrypted in your browser: the people in the conversation and Lumi (the owner's AI) can read them; the team box "
+             "itself can not read them, but it does see who talks to whom and when. Calls go browser to browser; the caller's browser "
+             "records each call encrypted for Lumi only, and everyone sees a 'Recording for Lumi' bar."},
     {"id": "caps", "title": "Your caps", "link": "#/caps",
      "text": "Marjus sets how much model memory and how many models each account may use. The team gateway enforces it and tells you why "
              "when it says no."},
@@ -97,13 +100,28 @@ CLAIMS
    react, and  %(u)s/api/builds/<id>  plus  git clone  of your sandbox still give the teammate 404/403. "Your work that goes out
    next time" on the Team feed page lists exactly what will be published. If the box was off at 14:00 it publishes as soon as it is
    back, marked "published late". Admins can also "publish now"; such a publish is labelled "Early publish".)
-10. Messages, calls and video calls with a must-accept monitoring notice: %(msg)s. The announced design: content encrypted at rest to
-   the owner's AI's (Lumi's) key, monitoring done by an AI first, and any concern verified by a third-party AI before a human sees it.
-   Encryption at rest and who holds the key can only be PARTLY verified from outside (I can read the published notice and design, not
-   the disk).
+10. Messages, calls and video calls with a must-accept monitoring notice: %(msg)s. Claimed design: my browser makes its own key
+   pair (RSA-OAEP-3072; the private half is non-extractable and stays in this browser). Each message and attachment is encrypted in my
+   browser with a fresh AES-256-GCM key, and that key is wrapped for every member of the conversation and for Lumi's public key
+   (Lumi = the owner's AI; its private key is only on the owner's PC BESNIK). So the content is encrypted at rest, the people in the
+   conversation and Lumi can read it, and the team box itself can NOT decrypt it - but the server DOES see metadata: who is in which
+   conversation, who sent what when, sizes, who called whom and for how long. Calls go browser to browser (WebRTC, DTLS-SRTP); the
+   server only relays the connection set-up. The CALLER's browser records each call, encrypted for Lumi's key only, and uploads it
+   during the call; everyone in the call sees a "Recording for Lumi" bar with how many encrypted chunks the box has received.
+   Monitoring: an AI reads first; a concern reaches a human only if a second, different AI independently agrees.
+   (Tests: before accepting the notice, every /api/m/messages/ request answers 403. In the browser's developer tools, Network tab,
+   look at what /api/m/messages/send uploads: only base64 ciphertext and wrapped keys, never my text. Ask a teammate who is NOT in a
+   conversation to open %(u)s/#/m/messages/t/<its id> - expected "no such conversation". The Messages page shows "Lumi's key" as a
+   fingerprint: compare it with the one Marjus publishes; if my browser ever sees a different one it warns. In a call, both people
+   read out the 6-digit safety code - if they differ, someone is in the middle. %(u)s/how-it-works#messages explains the rest.)
+   What can only be PARTLY verified: that BESNIK really is the only holder of Lumi's private key, and that the page code the box serves
+   is the published code (a box that was modified could serve different JavaScript - the same limit as any web app). A modified
+   browser could also skip the call recording; the other people would see "no recording has reached the team box yet". Group calls
+   work for up to 4 people (browser-to-browser); bigger calls need a media server (SFU) - not built yet.
 11. What is stored today: my chats with the AIs, my settings versions, my builds and their transcripts are stored on the team box under
-   my member folder (readable by me and by the admins / the machine's operator; not encrypted at rest yet). The owner's gateway logs
-   usage numbers per account (tokens, seconds), not the chat text - that part can not be verified from outside.
+   my member folder (readable by me and by the admins / the machine's operator; not encrypted at rest yet). Messages and call
+   recordings are the exception: stored encrypted only (claim 10). The owner's gateway logs usage numbers per account (tokens,
+   seconds), not the chat text - that part can not be verified from outside.
    Home feed posts, their attachments, comments and reactions are visible to every signed-in team member and stored on the team box
    (not encrypted at rest); deleting a post deletes its files.
 12. Home feed uploads: %(home)s. Allowed: pictures (png jpg gif webp), videos (mp4 mov webm), notes (txt md), spreadsheets (csv xlsx

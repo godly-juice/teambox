@@ -104,11 +104,47 @@ are accepted only as downloads (<code>application/octet-stream</code>, <code>Con
 as a page on this site. Every file is sent with <code>X-Content-Type-Options: nosniff</code> and a sandboxing Content-Security-Policy.</li>
 </ul>
 
-<h2 id="messages">Messages, calls, video calls and the monitoring notice - not live yet</h2>
-<p>Planned design: the content is encrypted at rest to the owner's AI's (Lumi's) key and can only be decrypted on BESNIK. Members read
-their own conversations. Monitoring is done by an AI first, and any concern is checked by a third-party AI before it reaches a human.
-Before first use you must accept this notice from the owner:</p>
+<h2 id="messages">Messages, calls, video calls and the monitoring notice</h2>
+<p><strong>The notice first.</strong> Before you can use messages or calls, you read the owner's notice below and press "I understand
+and agree". The team box stores who accepted, when, and which version of the notice (its sha256). Until then every messages/calls
+request is refused. If the notice ever changes, everyone is asked again.</p>
 <blockquote class="card notice-text" id="notice"></blockquote>
+<p><strong>Who can read what.</strong></p>
+<ul>
+<li><strong>The people in a conversation</strong> can read it, in their own browser.</li>
+<li><strong>Lumi can read everything</strong>: every message, every attachment and every call recording. Lumi is the owner's AI; its
+private key exists only on the owner's PC (BESNIK). Lumi reads first; see "Monitoring" below.</li>
+<li><strong>The team box itself can not decrypt</strong> any message, attachment or recording. It never has a private key. The admins
+can not read a conversation they are not in either.</li>
+<li><strong>Metadata is visible to the team box</strong>: who is in which conversation, who sent something when, how big it is, who called
+whom, when and for how long, and the network details needed to connect a call.</li>
+</ul>
+<p><strong>How it works.</strong> The first time you open Messages, your browser makes its own key pair (RSA-OAEP, 3072 bits). The private
+half is created "non-extractable": it stays in that browser's storage, and no page - not even ours - can copy it out. Only the public
+half goes to the team box. When you send a message, your browser encrypts it (and any attachment) with a fresh random AES-256-GCM key,
+then locks that key separately for every key of every person in the conversation and for Lumi's public key. The team box receives only
+the scrambled bytes and those locked keys. It checks their shape: it refuses anything that is not locked for Lumi, is locked for someone
+outside the conversation, or looks like plain text or a plain picture/video file.</p>
+<p>Each browser you use has its own key. Messages sent before a browser had its key can not be opened in that browser (Lumi can still
+read them). An optional <em>recovery file</em> (a second key, protected by a passphrase you choose) lets you restore access in a new
+browser; the team box never sees the passphrase.</p>
+<p><strong>Calls and video calls</strong> go directly between the browsers (WebRTC, always encrypted with DTLS-SRTP). The team box only passes
+on the messages that set the call up. To check that nobody is in the middle, both people read out the 6-digit <em>safety code</em> shown
+next to each other's video; it must match. <strong>Recording for Lumi:</strong> the caller's browser records the call (mixed sound and a
+small low-quality video), encrypts it so that only Lumi's key can open it, and uploads it in pieces during the call. Everyone in the call
+sees a red "Recording for Lumi" bar and how many encrypted pieces the team box has received; if none arrive, the bar says so.
+Calls work for up to 4 people for now (every browser connects to every other one). Bigger group calls need a media server (an SFU),
+which is not built yet.</p>
+<p><strong>Monitoring (the WatchDog).</strong> On BESNIK, Lumi's review program pulls the encrypted data from the team box, decrypts it in
+memory and gives each item to an AI. Only if that AI raises a concern does a second AI - a different model - look at the same content
+on its own, without seeing the first AI's opinion. Only when two different AIs agree does a short plain-language note (what was flagged
+and why, by both) reach a human admin. Everything else is never shown to a person. (Today the review program is a tested stub: the two
+AIs are placeholders and real models are not connected yet, and call recordings are not transcribed yet.)</p>
+<p><strong>Honest limits.</strong> You can check what your browser sends (developer tools, Network tab: only base64 ciphertext), but you can not
+see the box's disk or BESNIK, so "only Lumi holds the private key" is a promise you can only partly verify. Like any website, a team box
+that was tampered with could serve different page code. A modified browser could skip the recording - the others would see that no
+recording arrived. The server can not tell disguised plain data from real encryption with certainty; its checks catch mistakes, not a
+determined cheater.</p>
 
 <h2 id="stored">What is stored today, and who can see it</h2>
 <ul>
@@ -117,6 +153,8 @@ and your settings versions. All of this is on the team box's disk, under your me
 the machine) can read it. It is <strong>not encrypted at rest yet</strong>.</li>
 <li>Home feed posts, their files, comments and reactions (visible to every team member), and the team feed's read-only copies of
 published work. Also not encrypted at rest.</li>
+<li>Messages, attachments and call recordings: <strong>encrypted only</strong> (see above), plus their metadata, your notice acceptance
+(email, time, notice version) and your browsers' public keys.</li>
 <li>Your git tokens: only a hash of each one.</li>
 <li>On BESNIK, the team gateway logs usage numbers per account (model, tokens, seconds), not the text of your chats.</li>
 </ul>

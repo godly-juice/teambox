@@ -23,5 +23,14 @@
   "limits": {"sandboxes_per_member": 10, "sandbox_max_mb": 200, "git_max_push_mb": 50, "chat_messages_max": 200, "tokens_per_member": 5},
   "feeds": {"timezone": "America/Chicago", "publish_weekday": 1, "publish_time": "14:00", "scheduler": true, "tick_s": 60,
             "max_file_mb": 95, "member_quota_mb": 1000, "max_files_per_post": 10, "post_max_chars": 10000, "comment_max_chars": 4000,
-            "pending_hours": 24}
+            "pending_hours": 24},
+  "comms": {
+    "lumi_public_key": "REPLACE-with-the-SPKI-printed-by-lumi_comms_key.py-on-BESNIK",
+    "lumi_kid": "REPLACE-with-the-kid-printed-by-lumi_comms_key.py",
+    "export_token_sha256": "REPLACE-with-the-export-token-sha256-printed-by-lumi_comms_key.py",
+    "ice_servers": [{"urls": ["stun:REPLACE-turn-host:3478"]}],
+    "turn": {"urls": ["turn:REPLACE-turn-host:3478?transport=udp", "turns:REPLACE-turn-host:5349?transport=tcp"],
+             "secret_file": "/etc/teambox/turn.secret", "ttl_s": 3600},
+    "max_call": 4
+  }
 }
