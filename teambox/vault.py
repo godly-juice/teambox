@@ -1,4 +1,4 @@
-"""THE VAULT - each member's personal encrypted storage (notes + files). Marjus, 2026-10-21: "a password for their vault" ... his
+"""THE VAULT - each member's personal encrypted storage (notes + files). the owner, 2026-10-21: "a password for their vault" ... his
 pick: Lumi CAN read it (locked with their password AND Lumi's key).
 
 Everything secret happens in the member's BROWSER (static/vault.js, WebCrypto), like messages:
