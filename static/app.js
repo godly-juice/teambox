@@ -4,7 +4,7 @@
 (function () {
   "use strict";
   var TB = window.TB = { views: {}, me: null };
-  var BANNER = "TEAM PROJECT SPACE - on the team computer, not your computer and not Marjus's computer";
+  var BANNER = "TEAM PROJECT SPACE - on the team computer, not your computer and not the owner's computer";
 
   function h(tag, attrs) {
     var el = document.createElement(tag);
@@ -70,8 +70,9 @@
   // ------------------------------------------------------------------ nav
   var NAV = [
     ["#/", "Home"], ["#/tour", "Tour"], ["#/projects", "Projects"], ["#/builds", "AI builds"], ["#/models", "Models & chat"],
-    ["#/vault", "Vault"], ["#/byo", "Your own AI tool"], ["#/caps", "Your caps"], ["#/profile", "Profile"]
+    ["#/vault", "Vault"], ["#/byo", "Your own AI tool"], ["#/caps", "Your caps"], ["#/people", "People: invite"], ["#/profile", "Profile"]
   ];
+  var APPLY_URL = "https://apply.xseed.ing";
   function renderNav(mods) {
     var nav = document.getElementById("nav"); nav.textContent = "";
     NAV.forEach(function (n) { nav.appendChild(h("a", { href: n[0], text: n[1] })); });
@@ -316,7 +317,7 @@
         api("POST", "/api/chats/" + id + "/send", { text: t }).then(function (j) { c = j.chat; input.value = ""; paint(); if (j.versions) paintVer(j); })
           .catch(function (e) { box.appendChild(err(e)); }).then(function () { btn.disabled = false; btn.textContent = "Send"; });
       } }, "Send");
-      if (c.lumi) show(h("h1", { text: c.title }), h("p", { class: "muted", text: "Lumi (Marjus's AI assistant) through the team's shared model " + c.model + ". Lumi never asks for your PIN or vault password. This chat is saved under your profile." }), box, h("label", { for: "chatInput", text: "Your message" }), input, h("div", { class: "row" }, btn, h("a", { href: "#/models", text: "Back" })));
+      if (c.lumi) show(h("h1", { text: c.title }), h("p", { class: "muted", text: "Lumi (the owner's AI assistant) through the team's shared model " + c.model + ". Lumi never asks for your PIN or vault password. This chat is saved under your profile." }), box, h("label", { for: "chatInput", text: "Your message" }), input, h("div", { class: "row" }, btn, h("a", { href: "#/models", text: "Back" })));
       else { paintVer(r); show(h("h1", { text: c.title }), verLine, verNote, h("div", { class: "row" }, h("label", { for: "chatVersion", text: "Settings version" }), verSel), box, h("label", { for: "chatInput", text: "Your message" }), input, h("div", { class: "row" }, btn, h("a", { href: "#/models", text: "Back" }))); }
     }).catch(function (e) { show(err(e)); });
   }
@@ -390,7 +391,7 @@
       if (!m.ok) return show(h("h1", { text: "Your caps" }), h("div", { class: "err", text: "The team gateway said: " + (m.refused || "no answer") }));
       var c = m.your_caps || {}, t = m.team || {};
       show(h("h1", { text: "Your caps" }),
-        h("p", { class: "muted", text: "Set by Marjus on BESNIK and enforced by the team gateway there. When it says no, you see its reason word for word." }),
+        h("p", { class: "muted", text: "Set by the owner on BESNIK and enforced by the team gateway there. When it says no, you see its reason word for word." }),
         h("div", { class: "card" }, h("table", {},
           h("tr", {}, h("th", { text: "Model memory for your account" }), h("td", { text: (c.ram_gb_cap != null ? c.ram_gb_cap + " GB" : "-") })),
           h("tr", {}, h("th", { text: "Models you may run at once" }), h("td", { text: c.max_models != null ? String(c.max_models) : "-" })),
@@ -419,7 +420,7 @@
       h("div", { class: "row" }, h("button", { onclick: function () { api("POST", "/api/profile", vals(f)).then(function () { out.textContent = ""; out.appendChild(h("div", { class: "okbox", text: "Saved" })); boot(true); }).catch(function (e) { out.textContent = ""; out.appendChild(err(e)); }); } }, "Save"),
         h("a", { class: "btn ghost", href: "#/byo", text: "Git tokens" }), h("a", { class: "btn ghost", href: "#/vault", text: "Vault" }), h("a", { class: "btn ghost", href: "#/tour", text: "Open the tour again" })), out,
       acc ? h("div", { class: "card" }, h("h3", { text: "Signing in" }),
-        h("p", { class: "muted", text: "You stay signed in until " + TB.me.session.idle_minutes + " minutes without activity, or " + TB.me.session.absolute_hours + " hours at most. Nobody - not Marjus, not Lumi - will ever ask for your PIN or vault password." }),
+        h("p", { class: "muted", text: "You stay signed in until " + TB.me.session.idle_minutes + " minutes without activity, or " + TB.me.session.absolute_hours + " hours at most. Nobody - not the owner, not Lumi - will ever ask for your PIN or vault password." }),
         h("div", { class: "row" }, h("button", { class: "ghost", type: "button", onclick: signOut }, "Sign out"),
           h("button", { class: "danger", type: "button", id: "signOutAll", onclick: function () {
             if (!confirm("Sign out on every device and browser?")) return;
@@ -435,7 +436,7 @@
 
   // ------------------------------------------------------------------ signed out: sign in, or first visit with the invite code
   function bare() { document.getElementById("nav").textContent = ""; document.getElementById("who").textContent = ""; }
-  var NEVER = "Marjus and Lumi will never ask for your PIN or your vault password.";
+  var NEVER = "The owner and Lumi will never ask for your PIN or your vault password.";
   function vSignIn(why) {
     bare();
     var id = h("input", { id: "signinId", autocomplete: "username" }), pin = h("input", { type: "password", id: "signinPin", inputmode: "numeric", autocomplete: "current-password" }), out = h("div");
@@ -446,13 +447,14 @@
       } }, h("label", { for: "signinId", text: "Your sign-in name (the phone number, email or name you chose)" }), id, h("label", { for: "signinPin", text: "PIN" }), pin,
         h("div", { class: "row" }, h("button", { type: "submit" }, "Sign in")), out),
       h("p", {}, "First time here? ", h("a", { href: "#/join", text: "I have an invite code" })),
-      h("p", { class: "muted", text: NEVER + " Forgot your PIN? Ask Marjus for a new invite." }),
+      h("p", {}, "Want to join the team? ", h("a", { href: APPLY_URL, text: "Apply at " + APPLY_URL.replace("https://", "") }), " - a member or the owner then sends you an invite code."),
+      h("p", { class: "muted", text: NEVER + " Forgot your PIN? Ask the person who invited you (or the owner) for a new invite." }),
       h("p", {}, h("a", { href: "/how-it-works", text: "How this site works" })));
   }
   function vJoin() {
     bare();
     var code = h("input", { id: "joinCode", inputmode: "numeric", autocomplete: "one-time-code", placeholder: "1234 5678 9012", maxlength: "20" }), out = h("div");
-    show(h("h1", { text: "Welcome to the team box" }), h("p", { text: "Lumi (Marjus's AI assistant) gave you a 12-digit invite code by email or on the phone. Type it here. It works once and expires." }),
+    show(h("h1", { text: "Welcome to the team box" }), h("p", { text: "Lumi (the owner's AI assistant) or a team member gave you a 12-digit invite code. Type it here. It works once and expires." }),
       h("form", { class: "card", onsubmit: function (ev) {
         ev.preventDefault(); out.textContent = "";
         api("POST", "/api/auth/join", { code: code.value }).then(function (r) { vSetup(r.setup); }).catch(function (e) { out.appendChild(err(e)); });
@@ -465,7 +467,7 @@
     var id = h("input", { id: "setupId", value: sugg[0] || "", autocomplete: "username", list: "setupIdList" });
     var dl = h("datalist", { id: "setupIdList" }, sugg.map(function (s) { return h("option", { value: s }); }));
     var p1 = h("input", { type: "password", id: "setupPin", inputmode: "numeric", autocomplete: "new-password" }), p2 = h("input", { type: "password", id: "setupPin2", inputmode: "numeric", autocomplete: "new-password" }), out = h("div");
-    show(h("h1", { text: "Hi " + (st.name || "") + "!" }), h("p", { text: "Marjus invited you to: " + (st.purpose || "") }),
+    show(h("h1", { text: "Hi " + (st.name || "") + "!" }), h("p", { text: "You were invited to: " + (st.purpose || "") }),
       h("form", { class: "card", onsubmit: function (ev) {
         ev.preventDefault(); out.textContent = "";
         if (!/^\d{6,12}$/.test(p1.value)) return out.appendChild(err("your PIN must be 6 to 12 digits"));
@@ -492,6 +494,37 @@
   function vWelcome() {
     show(h("h1", { text: "Lumi is saying hello..." }), h("p", { class: "muted", text: "Your first project is ready; Lumi is writing your welcome message." }));
     api("POST", "/api/welcome", {}).then(function (r) { TB.me.setup_next = null; location.hash = "#/chat/" + r.chat.id; }).catch(function (e) { show(err(e)); });
+  }
+
+  // ------------------------------------------------------------------ people: members invite others (2026-11-02) + the apply door
+  function vPeople() {
+    var out = h("div"), list = h("div");
+    function load() {
+      api("GET", "/api/invites").then(function (r) {
+        list.textContent = "";
+        list.appendChild(h("p", { class: "muted", text: "You have " + r.left + " of " + r.per_week + " invites left this week. An invite makes a member account (never an admin). The code shows once - give it to the person yourself." }));
+        if (r.invites.length) list.appendChild(h("table", {}, h("tr", {}, h("th", { text: "Name" }), h("th", { text: "Account" }), h("th", { text: "Status" }), h("th", { text: "Expires" })),
+          r.invites.map(function (i) { return h("tr", {}, h("td", { text: i.name }), h("td", { text: i.account }), h("td", {}, pill(i.status, i.status === "used" ? "ok" : /locked|revoked|expired/.test(i.status) ? "bad" : "")), h("td", { text: (i.expires || "").slice(0, 16) })); })));
+      }).catch(function (e) { list.textContent = ""; list.appendChild(err(e)); });
+    }
+    var f = { name: h("input", { id: "pName" }), purpose: h("input", { id: "pPurpose", placeholder: "what they will do here" }), reach: h("input", { id: "pReach", placeholder: "phone or email (optional)" }) };
+    show(h("h1", { text: "People" }),
+      h("p", { text: "Know someone who should be on the team? Two doors:" }),
+      h("ul", {}, h("li", {}, h("b", { text: "They apply: " }), h("a", { href: APPLY_URL, target: "_blank", rel: "noopener", text: APPLY_URL }), " - they say what they built, tick what Lumi may read about them (nothing is mandatory), and a human reads it."),
+        h("li", {}, h("b", { text: "You invite them: " }), "make an invite code below and send it to them yourself. They open ", h("a", { href: "#/join", text: "/join" }), ", type the code, choose a sign-in name and PIN.")),
+      h("form", { class: "card", onsubmit: function (ev) {
+        ev.preventDefault(); out.textContent = "";
+        var reach = f.reach.value.trim(), body = { name: f.name.value, purpose: f.purpose.value };
+        if (/@/.test(reach)) body.email = reach; else if (reach) body.phone = reach;
+        api("POST", "/api/invites", body).then(function (j) {
+          out.appendChild(h("div", { class: "card ok" }, h("h3", { text: "Invite code for " + j.name }), h("p", { class: "code", text: j.code }), h("p", { class: "muted", text: "Works once, expires " + (j.expires || "").slice(0, 16) + ". Their account will be " + j.account + ". " + j.note })));
+          f.name.value = ""; f.purpose.value = ""; f.reach.value = ""; load();
+        }).catch(function (e) { out.appendChild(err(e)); });
+      } }, h("h3", { text: "Invite someone" }), h("label", { for: "pName", text: "Their name" }), f.name, h("label", { for: "pPurpose", text: "What are they here to do?" }), f.purpose,
+        h("label", { for: "pReach", text: "Phone or email (optional - Lumi uses it to say hello)" }), f.reach, h("div", { class: "row" }, h("button", { type: "submit" }, "Make invite code")), out),
+      h("h3", { text: "Your invites" }), list,
+      h("p", { class: "muted", text: "Fair warning for everyone here: what you ask the shared models is visible to the owner (one line per question, never the answer), so the team stays safe." }));
+    load();
   }
 
   // ------------------------------------------------------------------ admin: invites + accounts
@@ -577,6 +610,7 @@
     if (v === "chat" && p[1]) return vChat(p[1]);
     if (v === "byo") return vByo();
     if (v === "caps") return vCaps();
+    if (v === "people") return vPeople();
     if (v === "profile") return vProfile();
     if (v === "admin") return vAdmin();
     if (v === "m" && p[1]) return vModule(p[1]);
