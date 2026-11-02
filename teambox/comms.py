@@ -1,4 +1,4 @@
-"""MESSAGES, CALLS and VIDEO CALLS - the server side (Marjus, 2026-10-21: "a facetime thing, a messaging place, a calls place, and
+"""MESSAGES, CALLS and VIDEO CALLS - the server side (the owner, 2026-10-21: "a facetime thing, a messaging place, a calls place, and
 these need to be encrypted with only my Lumi having the decryption key").
 
 WHAT THE TEAM BOX STORES AND WHAT IT CAN NOT DO
