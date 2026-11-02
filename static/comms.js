@@ -188,7 +188,7 @@
       return { cb: cb, el: h("label", { class: "pick", for: "pick-" + id }, cb, " " + nameOf(id), C.people[id].keys ? null : h("span", { class: "muted", text: " (has not opened Messages yet)" })) };
     });
     show(h("h1", { text: "Messages & calls" }), reminder(),
-      C.lumiChanged ? h("div", { class: "err", text: "WARNING: Lumi's key changed since this browser last saw it (" + fp(C.lumiChanged.was) + " -> " + fp(C.lumiChanged.now) + "). Ask Marjus whether that was him before sending anything." }) : null,
+      C.lumiChanged ? h("div", { class: "err", text: "WARNING: Lumi's key changed since this browser last saw it (" + fp(C.lumiChanged.was) + " -> " + fp(C.lumiChanged.now) + "). Ask the owner whether that was him before sending anything." }) : null,
       !C.state.lumi.configured ? h("div", { class: "err", text: C.state.lumi.why }) : null,
       j.calls.length ? h("div", { class: "card" }, h("h3", { text: "Calls going on now" }), j.calls.map(function (cl) {
         return h("div", { class: "row" }, h("span", { text: (cl.video ? "Video call" : "Call") + " started by " + nameOf(cl.started_by) + " at " + cl.started + " - " + cl.joined.length + " in it" }),
