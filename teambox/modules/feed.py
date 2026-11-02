@@ -1,4 +1,4 @@
-"""The HOME FEED (Marjus, 2026-10-21: "in the home page, add a feed where right now its just comments ppl can post but also
+"""The HOME FEED (the owner, 2026-10-21: "in the home page, add a feed where right now its just comments ppl can post but also
 they should be able to attach files to that post, videos, pictures, notepad, spreadbooks, etc.").
 
 Every signed-in member sees the home feed. A post = text + up to N attachments, plus comments and emoji reactions.
