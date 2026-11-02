@@ -1,7 +1,7 @@
 # TEAM SANDBOX RULES (for any AI tool working in this repository)
 
 You are working in a **TEAM SANDBOX** on a **shared team server** (the "team box", team.xseed.ing).
-This is **not the user's personal computer** and **not the owner's (Marjus's) computer**.
+This is **not the user's personal computer** and **not the owner's computer**.
 
 1. Work **only inside this repository**. Do not read, write or list anything outside it.
 2. **Never try to reach** other sandboxes, the team server itself, other machines, other networks or the internet from code you
