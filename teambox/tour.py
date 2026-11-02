@@ -1,4 +1,4 @@
-"""The ONBOARDING TOUR (Marjus, 2026-10-21: "as soon as people join, show a quick overview of what the website is and how its
+"""The ONBOARDING TOUR (the owner, 2026-10-21: "as soon as people join, show a quick overview of what the website is and how its
 intended to be used with checkpoints on each area and each checkpoint being clickable and at the bottom it should say ...").
 BOTTOM_TEXT is his sentence exactly. The verification prompt is generated from what is actually live (modules marked
 "coming soon" are said to be NOT live) and from the box's real settings, so it never claims more than the box does."""
@@ -12,7 +12,9 @@ INTRO = ("team.xseed.ing is the TEAM BOX: a separate computer that belongs to th
          "(small project folders), you can let the team's shared AI models build things in them, chat with those models (Lumi, the "
          "owner's AI assistant, welcomes you in a chat) and save your own versions of their settings, keep notes and files in your "
          "encrypted vault, or connect your own AI coding tool. Nothing you make is shown to the team unless you press 'Share to feed'. "
-         "When work is good, an admin promotes it into the shared team project. This is not your computer and not Marjus's computer.")
+         "When work is good, an admin promotes it into the shared team project. This is not your computer and not the owner's computer. "
+         "One honest line: what you ask the shared models is visible to the owner (one line per question, never the answer), so the team "
+         "stays safe.")
 
 CHECKPOINTS = [
     {"id": "home", "title": "Home feed", "link": "#/m/feed",
@@ -43,8 +45,12 @@ CHECKPOINTS = [
              "itself can not read them, but it does see who talks to whom and when. Calls go browser to browser; the caller's browser "
              "records each call encrypted for Lumi only, and everyone sees a 'Recording for Lumi' bar."},
     {"id": "caps", "title": "Your caps", "link": "#/caps",
-     "text": "Marjus sets how much model memory and how many models each account may use. The team gateway enforces it and tells you why "
+     "text": "The owner sets how much model memory and how many models each account may use. The team gateway enforces it and tells you why "
              "when it says no."},
+    {"id": "people", "title": "People: invite others, or send them to apply", "link": "#/people",
+     "text": "Know someone who belongs here? Make them an invite code (a few per week; it makes a member account, never an admin) and hand it "
+             "to them yourself, or send them to the public apply page, where they say what they built and tick what Lumi may read about them - "
+             "nothing there is mandatory, and a human reads every application."},
     {"id": "promote", "title": "Promote (admins)", "link": "#/builds",
      "text": "Only admins can promote a build into the shared team project, after looking at its changes, tests and summary. You can "
              "reject your own builds."},
@@ -71,16 +77,16 @@ Do not take the claims on trust. The site's public explanation is at %(u)s/how-i
 claim, say so clearly.
 
 CLAIMS
-1. Not my computer: the site runs on a separate team computer, not on my PC and not on the owner's (Marjus's) PCs. My own files are
+1. Not my computer: the site runs on a separate team computer, not on my PC and not on the owner's PCs. My own files are
    never reachable from it. (Test: nothing asks me to install anything; the site can only see what I upload or push. Where the machine
    physically is can NOT be proven from outside.)
-2. Sign-in: accounts exist only by invitation (from Marjus, or Lumi - the owner's AI - on his behalf); there is no self sign-up. The
+2. Sign-in: accounts exist only by invitation (from the owner, or Lumi - the owner's AI - on his behalf); there is no self sign-up. The
    invite is a one-time 12-digit code that expires after %(inv_h)s hours, works once, and locks after %(inv_tries)s wrong tries. With it I
    chose a sign-in name (my phone, email or a name) and a PIN of at least %(pin_min)s digits. The PIN is stored only as a salted, slow
    hash; wrong PINs lock the account (%(acc_fails)s tries -> %(lock_min)s minutes, longer each time) and too many wrong tries from one
    network block it for a while. My session is a cookie marked HttpOnly, Secure and SameSite=Lax; it ends after %(idle)s minutes without
    activity and after %(abs_h)s hours at most, and "Sign out everywhere" ends all my sessions. Cloudflare Access: %(access)s.
-   Nobody - not Marjus, not Lumi - will ever ask me for my PIN or my vault password. (Test: open the site in a private window - I get
+   Nobody - not the owner, not Lumi - will ever ask me for my PIN or my vault password. (Test: open the site in a private window - I get
    the sign-in page, and  %(u)s/api/me  answers 401. Type my invite code a second time - refused. In the browser's developer tools,
    Application -> Cookies, tb_session shows HttpOnly, Secure, SameSite Lax. Sign out everywhere, then reload in a second browser - signed
    out. Wrong PINs: after %(acc_fails)s the account says it is locked. How the PIN is hashed on the server can NOT be seen from outside.)
@@ -125,13 +131,13 @@ CLAIMS
    (Tests: before accepting the notice, every /api/m/messages/ request answers 403. In the browser's developer tools, Network tab,
    look at what /api/m/messages/send uploads: only base64 ciphertext and wrapped keys, never my text. Ask a teammate who is NOT in a
    conversation to open %(u)s/#/m/messages/t/<its id> - expected "no such conversation". The Messages page shows "Lumi's key" as a
-   fingerprint: compare it with the one Marjus publishes; if my browser ever sees a different one it warns. In a call, both people
+   fingerprint: compare it with the one the owner publishes; if my browser ever sees a different one it warns. In a call, both people
    read out the 6-digit safety code - if they differ, someone is in the middle. %(u)s/how-it-works#messages explains the rest.)
    What can only be PARTLY verified: that BESNIK really is the only holder of Lumi's private key, and that the page code the box serves
    is the published code (a box that was modified could serve different JavaScript - the same limit as any web app). A modified
    browser could also skip the call recording; the other people would see "no recording has reached the team box yet". Group calls
    work for up to 4 people (browser-to-browser); bigger calls need a media server (SFU) - not built yet.
-11. What is stored today: my account (sign-in name, a hash of my PIN, the purpose Marjus gave in my invite), my chats with the AIs, my
+11. What is stored today: my account (sign-in name, a hash of my PIN, the purpose the owner gave in my invite), my chats with the AIs, my
    settings versions, my projects, my builds and their transcripts are stored on the team box (readable by me and by the admins / the
    machine's operator; not encrypted at rest yet). Messages, call recordings and my vault are the exception: stored encrypted only
    (claims 10 and 13). The owner's gateway logs usage numbers per account (tokens, seconds), not the chat text - that part can not be
@@ -156,7 +162,7 @@ CLAIMS
    PARTLY verified, as in claim 10.)
 14. Lumi's welcome: after setup I land in a chat with Lumi. It goes to the team's shared AI model through the owner's team gateway,
    under my own account and caps, with a system prompt (written by the team box from a fixed template) that contains the purpose
-   Marjus gave in my invite and the links to the areas of this site. My first project was created from that purpose. If no model
+   the owner gave in my invite and the links to the areas of this site. My first project was created from that purpose. If no model
    answers, I get a fixed welcome text that says why. (Test: the chat is listed under Models & chat as "Lumi - welcome"; the first
    project is under Projects.)
 
