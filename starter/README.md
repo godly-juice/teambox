@@ -1,6 +1,6 @@
 # Your team sandbox
 
-> **TEAM SANDBOX** - this is the team's shared workspace on the team computer. Not your computer, not Marjus's computer.
+> **TEAM SANDBOX** - this is the team's shared workspace on the team computer. Not your computer, not the owner's computer.
 
 This repository is one of your private sandboxes on the team box (team.xseed.ing). Only you and the team's admins can see it.
 It started from a clean template - it contains no one's personal files and no code from anyone's own computer.
