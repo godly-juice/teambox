@@ -12,19 +12,19 @@
 <header class="top"><a class="brand" href="/">Team box</a><span class="who">How it works (public page)</span></header>
 <main class="page">
 <h1>How the team box works</h1>
-<div class="banner">TEAM PROJECT SPACE - on the team computer, not your computer and not Marjus's computer</div>
+<div class="banner">TEAM PROJECT SPACE - on the team computer, not your computer and not the owner's computer</div>
 <p>This page explains, in plain words, what team.xseed.ing is, what it stores, who can see what, and how you can check each claim
 yourself. It is public on purpose, so that you - or an AI you trust - can read it before signing in.</p>
 
 <h2 id="what">What it is</h2>
-<p>The team box is a separate computer that belongs to the team (a PC with an RTX 3060, running xOS, a Linux system). It is not a
+<p>The team box is a separate computer that belongs to the team (a PC with an RTX 3060, running xOS - its own operating system on its own compiled kernel). It is not a
 member's computer and not the owner's work PC (BESNIK) or personal PC. It holds none of the owner's files or secrets. It reaches the
 owner's shared AI models only through one narrow, capped door on BESNIK: the <em>team gateway</em>, which only offers chat with
 shared models and start/stop within caps.</p>
 
 <h2 id="signin">Signing in</h2>
-<p><strong>Accounts exist only by invitation.</strong> There is no sign-up form. Marjus - or Lumi, his AI assistant, on his behalf -
-makes an invite for a person with their name, phone or email and what they are there to do. The invite is a one-time
+<p><strong>Accounts exist only by invitation.</strong> There is no sign-up form. The owner - or Lumi, the owner's AI assistant, on the owner's behalf - or
+a member (People page) makes an invite for a person with their name, phone or email and what they are there to do. The invite is a one-time
 <strong>12-digit code</strong>. Lumi sends it by email or reads it out on a phone call. It works <strong>once</strong>, expires after
 <strong>48 hours</strong> (the box's setting), and locks after 5 wrong tries. The team box stores only a salted, slow hash of it.</p>
 <p>On your first visit (team.xseed.ing/join) you type the code, then choose:</p>
@@ -38,15 +38,24 @@ slow hash (scrypt with a secret key of the box);</li>
 <p>Later you sign in with your sign-in name and PIN. Your session is a cookie marked <code>HttpOnly</code>, <code>Secure</code> and
 <code>SameSite=Lax</code>; it ends after a while without activity (4 hours by default) and after 3 days at most, and "Sign out
 everywhere" on your Profile ends every session at once. Wrong PINs lock the account for a while (longer each time), and too many wrong
-tries from one network are blocked for a while. <strong>Nobody - not Marjus, not Lumi - will ever ask you for your PIN or your vault
+tries from one network are blocked for a while. <strong>Nobody - not the owner, not Lumi - will ever ask you for your PIN or your vault
 password.</strong></p>
 <p>Cloudflare Access (an email login in front of the site) is switched off; it can be switched back on as an extra outer lock in the
-box's configuration. Git tokens for your own AI tools are a separate login for git only (see below). Admins are the accounts Marjus
+box's configuration. Git tokens for your own AI tools are a separate login for git only (see below). Admins are the accounts the owner
 made as admin when the box was installed.</p>
+
+<h2 id="people">People: inviting others, and applying</h2>
+<p>Two doors into the team. <strong>Members can invite</strong>: on the People page a member makes a one-time 12-digit invite code for
+someone (a few per week; it always makes a <em>member</em> account, never an admin) and hands it over personally - the box never sends it.
+<strong>Anyone can apply</strong> at the public apply page linked from the sign-in screen: they say what they built, give links or files, and
+tick exactly which public sources Lumi (the owner's AI) may read about them - nothing there is mandatory, a human reads every application,
+and the applicant gets a delete link that removes everything. The apply page's code is public, so what is looked at is not a secret.</p>
+<p><strong>One honest line for every member:</strong> what you ask the shared models is visible to the owner - one line per question, never
+the answer - so the team stays safe. Your projects, vault and messages are covered by their own rules above and below.</p>
 
 <h2 id="projects">Projects</h2>
 <p>Each member gets a private project and can create more. (The site's addresses still say "sandbox" in places; it is the same
-thing.) Your <strong>first project</strong> is made for you from what Marjus said you are there to do. A project is a git
+thing.) Your <strong>first project</strong> is made for you from what the owner said you are there to do. A project is a git
 repository on the team box that starts from a clean template: a README, guardrail files for AI tools, and a tiny example. It never
 contains a copy of anyone's own files or of BESNIK's code. <strong>Only you and the admins can see your projects, builds, chats,
 vault and settings versions</strong> - the server checks this on every request, for the web pages, the API and git. Asking for
@@ -99,9 +108,9 @@ only.</p>
 this. The team box cannot change it.</p>
 
 <h2 id="lumi">Lumi's welcome</h2>
-<p>When your setup is done you land in a chat with <strong>Lumi</strong>, Marjus's AI assistant. The chat goes to the team's shared AI
+<p>When your setup is done you land in a chat with <strong>Lumi</strong>, the owner's AI assistant. The chat goes to the team's shared AI
 model through the owner's team gateway, under your own account and caps. The team box writes Lumi's instructions from a fixed template
-that contains what Marjus said you are there to do and the links to the areas of this site, so her first message tells you where to
+that contains what the owner said you are there to do and the links to the areas of this site, so her first message tells you where to
 do what and points you to your first project. If no model answers, you get a fixed welcome text that says why. The chat is saved
 under your profile like any other chat (Models &amp; chat).</p>
 
