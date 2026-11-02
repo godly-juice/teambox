@@ -1,8 +1,8 @@
-"""MESSAGES, CALLS and VIDEO CALLS (Marjus, 2026-10-21, team-calls-messages-monitoring-notice.txt). LIVE.
+"""MESSAGES, CALLS and VIDEO CALLS (the owner, 2026-10-21, team-calls-messages-monitoring-notice.txt). LIVE.
 The storage + checks live in teambox/comms.py (read its docstring for exactly what the server can and can not see). This file:
 the module entry, the HTTP routes under /api/m/messages/..., the MONITORING NOTICE GATE, and the export door for BESNIK.
 
-NOTICE is Marjus's text verbatim with exactly the three approved typo fixes (sctrictly->strictly, intersts->interests,
+NOTICE is the owner's text verbatim with exactly the three approved typo fixes (sctrictly->strictly, intersts->interests,
 supercede->supersede) - change nothing else. Its sha256 is the notice VERSION: a member must accept the current version before ANY
 messages/calls route answers (except reading the notice itself); if the text ever changes, everyone is asked again."""
 import hashlib
