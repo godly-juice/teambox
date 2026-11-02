@@ -264,7 +264,7 @@ class TeamBoxTest(unittest.TestCase):
             self.assertIn(phrase, rules)
         readme = self.api("GET", "/api/sandboxes/%s/my-sandbox/file?path=README.md" % me["id"], A)[1]["text"]
         self.assertIn("guardrail files are guidance, not the protection", readme)
-        self.assertIn("Not your computer, not Marjus's computer", readme)
+        self.assertIn("Not your computer, not the owner's computer", readme)
         print("\n  default sandbox = exactly the %d starter files; guardrails + README wording present" % len(files))
 
     def test_11_new_sandbox_and_names(self):
@@ -622,7 +622,7 @@ class TeamBoxTest(unittest.TestCase):
         self.assertTrue(me["first_visit"], "a new member is sent to the tour")
         s, t = self.api("GET", "/api/tour", "newbie@test.example")
         self.assertEqual(t["bottom_text"], EXACT_BOTTOM)
-        self.assertEqual([c["id"] for c in t["checkpoints"]], ["home", "projects", "builds", "models", "byo", "vault", "messages", "caps", "promote"])
+        self.assertEqual([c["id"] for c in t["checkpoints"]], ["home", "projects", "builds", "models", "byo", "vault", "messages", "caps", "people", "promote"])
         self.assertTrue(all(c["link"].startswith("#/") for c in t["checkpoints"]), "every checkpoint is clickable")
         for claim in ("Project isolation", "The jail", "Git tokens", "Caps", "Who can promote", "encrypted at rest", "Not my computer", "can NOT", "PARTLY"):
             self.assertIn(claim, t["prompt"])
