@@ -103,7 +103,7 @@
       V.state = st; el.textContent = "";
       if (st.vault) return done();
       if (!st.lumi.configured) {
-        el.appendChild(h("p", { text: "Your vault switches on as soon as Marjus has set Lumi's key on the team box (" + (st.lumi.why || "not set yet") + "). You will be asked for a vault password then." }));
+        el.appendChild(h("p", { text: "Your vault switches on as soon as the owner has set Lumi's key on the team box (" + (st.lumi.why || "not set yet") + "). You will be asked for a vault password then." }));
         el.appendChild(h("button", { type: "button", onclick: function () { api("POST", "/api/setup/vault-later", {}).then(done).catch(function (e) { el.appendChild(err(e)); }); } }, "Continue"));
         return;
       }
