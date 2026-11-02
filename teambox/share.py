@@ -1,4 +1,4 @@
-"""SHARE TO FEED (Marjus, 2026-10-21: "their projects shouldnt be shared actually unless they press a share button to feed. take the
+"""SHARE TO FEED (the owner, 2026-10-21: "their projects shouldnt be shared actually unless they press a share button to feed. take the
 weekly thing off").
 
 Projects (sandboxes), builds and settings versions are PRIVATE: only the owner and the admins can see them. The OWNER can press
