@@ -518,7 +518,7 @@ class AuthTest(unittest.TestCase):
         p = t["prompt"]
         for must in ("one-time 12-digit code that expires after 48 hours", "locks after 5 wrong tries", "PIN of at least 6 digits",
                      "HttpOnly, Secure and SameSite=Lax", "after 240 minutes without", "after 72 hours at most", "Sign out everywhere",
-                     "Cloudflare Access: switched OFF", "Nobody - not Marjus, not Lumi - will ever ask me for my PIN or my vault password",
+                     "Cloudflare Access: switched OFF", "Nobody - not the owner, not Lumi - will ever ask me for my PIN or my vault password",
                      "13. The vault", "Lumi (the owner's AI) can read my vault", "covered by the monitoring notice", "14. Lumi's welcome",
                      "9. Share to feed: LIVE", "There is no automatic or scheduled publishing"):
             self.assertIn(must, p.replace("\n   ", " "), must)
@@ -530,14 +530,14 @@ class AuthTest(unittest.TestCase):
         s, page = Browser(self.base).req("GET", "/how-it-works")
         for must in ('id="signin"', "Accounts exist only by invitation", "12-digit code", "SameSite=Lax", 'id="vault"', "Lumi can read your vault",
                      "monitoring notice covers it", 'id="lumi"', 'id="sharing"', 'id="projects"',
-                     "TEAM PROJECT SPACE - on the team computer, not your computer and not Marjus's computer"):
+                     "TEAM PROJECT SPACE - on the team computer, not your computer and not the owner's computer"):
             self.assertIn(must, page)
         for gone in ("Tuesday", "you sign in with your email (a one-time code)", "Team feed (every"):
             self.assertNotIn(gone, page)
         ids = set(re.findall(r'id="([a-z-]+)"', page))
         self.assertTrue({c["id"] for c in t["checkpoints"]} <= ids, "every checkpoint's Details link has its section")
         js = open(os.path.join(ROOT, "static", "app.js"), encoding="utf8").read()
-        self.assertIn('"TEAM PROJECT SPACE - on the team computer, not your computer and not Marjus\'s computer"', js)
+        self.assertIn('"TEAM PROJECT SPACE - on the team computer, not your computer and not the owner\'s computer"', js)
         self.assertIn('"#/projects", "Projects"', js)
         self.assertIn('v === "projects" || v === "sandboxes"', js, "old #/sandboxes addresses keep working")
         print("\n  tour/how-it-works/prompt: bottom text exact; sign-in, vault (Lumi can read it, monitoring notice), welcome, Share to feed "
