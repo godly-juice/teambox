@@ -3,6 +3,8 @@
   "port": 8740,
   "data_dir": "/var/lib/teambox",
   "public_url": "https://team.xseed.ing",
+  "apply_url": "https://apply.xseed.ing",
+  "member_invites_per_week": 3,
   "admin_emails": [],
   "dev_mode": false,
   "trusted_proxy_ips": ["127.0.0.1", "::1"],
