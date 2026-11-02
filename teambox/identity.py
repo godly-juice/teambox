@@ -1,4 +1,4 @@
-"""Who is asking. Since 2026-10-21 (Marjus dropped the Cloudflare Access email check) identity = the team box's OWN sign-in session
+"""Who is asking. Since 2026-10-21 (the owner dropped the Cloudflare Access email check) identity = the team box's OWN sign-in session
 (auth.py: invite code -> PIN). Requests are still accepted only from the local cloudflared (trusted_proxy_ips, default 127.0.0.1/::1).
 Cloudflare Access can be switched back on as an extra OUTER lock (config access.enabled; the RS256 Access JWT is verified against the
 team domain's public keys when access.team_domain is set) - it never decides who you are.
