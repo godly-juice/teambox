@@ -4,24 +4,38 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<title>Team box</title>
+<title>xseeding / team</title>
+<link rel="preload" as="image" href="/static/assets/team-universe.png">
 <link rel="stylesheet" href="/static/app.css">
 <script src="/static/app.js" defer></script>
+<script src="/static/workspace-data.js" defer></script>
+<script src="/static/workspace.js" defer></script>
 <link rel="stylesheet" href="/static/feeds.css">
+<link rel="stylesheet" href="/static/operator.css">
 <script src="/static/feeds.js" defer></script>
 <script src="/static/comms.js" defer></script>
 <script src="/static/vault.js" defer></script>
+<script src="/static/universe.js" defer></script>
 </head>
-<body>
+<body class="app-boot" data-screen="app">
+<div id="universeScene" class="universe-scene" aria-hidden="true"></div>
+<canvas id="starfield" class="starfield" aria-hidden="true"></canvas>
 <header class="top">
   <button id="menuBtn" class="menu-btn" aria-label="Menu" aria-expanded="false">&#9776;</button>
-  <a class="brand" href="#/">Team box</a>
-  <span class="who" id="who"></span>
-  <button id="themeBtn" class="ghost small" aria-label="Switch light/dark">Theme</button>
+  <a class="brand" href="#/" aria-label="xseeding team workspace">xseeding <span class="brand-slash">/</span><span class="brand-context">team</span></a>
+  <nav id="nav" class="nav" aria-label="Main"></nav>
+  <div class="top-actions">
+    <a class="entry-help" href="/how-it-works">How it works <img class="ui-icon" alt="" src="/static/assets/icons/arrow-right.svg"></a>
+    <button id="themeBtn" class="ghost small theme-toggle" aria-label="Switch light/dark">Theme</button>
+    <a class="who" id="who" href="#/profile" aria-label="Your profile"></a>
+  </div>
 </header>
 <div class="layout">
-  <nav id="nav" class="nav" aria-label="Main"></nav>
   <main id="view" class="page" tabindex="-1"><p class="muted">Loading...</p></main>
+</div>
+<div class="scene-controls">
+  <button id="motionToggle" class="motion-control" type="button" aria-pressed="true"><img class="ui-icon" src="/static/assets/icons/pause.svg" alt=""><span>Motion on</span></button>
+  <span class="scene-note">A place for the work ahead.</span>
 </div>
 </body>
 </html>

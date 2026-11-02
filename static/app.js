@@ -74,15 +74,18 @@
   ];
   function renderNav(mods) {
     var nav = document.getElementById("nav"); nav.textContent = "";
-    NAV.forEach(function (n) { nav.appendChild(h("a", { href: n[0], text: n[1] })); });
-    nav.appendChild(h("h4", { text: "Team" }));
-    (mods || []).forEach(function (m) {
-      nav.appendChild(h("a", { href: "#/m/" + m.id }, m.nav, m.status !== "live" ? h("span", { class: "soon", text: "coming soon" }) : null));
+    [["#/", "Workspace"], ["#/projects", "Projects"], ["#/m/messages", "Messages"]].forEach(function(n){
+      nav.appendChild(h("a", {href:n[0], text:n[1]}));
     });
-    if (TB.me && TB.me.admin) { nav.appendChild(h("h4", { text: "Admin" })); nav.appendChild(h("a", { href: "#/admin", text: "Admin: review & promote" })); nav.appendChild(h("a", { href: "#/admin/invites", text: "Admin: invites & accounts" })); }
-    nav.appendChild(h("h4", { text: "Help" }));
-    nav.appendChild(h("a", { href: "/how-it-works", text: "How it works" }));
-    if (TB.me && TB.me.signed_in_with === "session") nav.appendChild(h("button", { class: "ghost small", type: "button", id: "signOut", onclick: signOut }, "Sign out"));
+    var menu = h("div", {class:"nav-popover"});
+    NAV.filter(function(n){return n[0] !== "#/" && n[0] !== "#/projects";}).forEach(function(n){menu.appendChild(h("a",{href:n[0],text:n[1]}));});
+    (mods || []).filter(function(m){return m.id !== "messages";}).forEach(function(m){menu.appendChild(h("a",{href:"#/m/"+m.id,text:m.nav}));});
+    if(TB.me && TB.me.admin){menu.appendChild(h("h4",{text:"Admin"}));menu.appendChild(h("a",{href:"#/admin",text:"Review & promote"}));menu.appendChild(h("a",{href:"#/admin/invites",text:"Invites & accounts"}));}
+    menu.appendChild(h("a",{href:"/how-it-works",text:"How it works"}));
+    var motion=document.getElementById('motionToggle'),motionItem=h('button',{type:'button','aria-pressed':motion&&motion.getAttribute('aria-pressed')==='true'?'true':'false',text:'Toggle background motion',onclick:function(){if(!motion)return;motion.click();motionItem.setAttribute('aria-pressed',motion.getAttribute('aria-pressed'));}});menu.appendChild(motionItem);
+    menu.appendChild(h("button",{type:"button",text:"Switch light / dark",onclick:function(){document.getElementById("themeBtn").click();}}));
+    if(TB.me && TB.me.signed_in_with === "session") menu.appendChild(h("button",{type:"button",id:"signOut",onclick:signOut,text:"Sign out"}));
+    nav.appendChild(h("details",{class:"nav-more"},h("summary",{text:"More"}),menu));
     markNav();
   }
   function markNav() {
@@ -95,6 +98,7 @@
 
   // ------------------------------------------------------------------ views
   function vHome() {
+    if (TB.renderWorkspace) return TB.renderWorkspace();
     show(h("h1", { text: "Welcome" + (TB.me.display_name ? ", " + TB.me.display_name : "") }),
       h("p", {}, "This is the team box: the team's own computer. ", h("a", { href: "#/tour", text: "Take the 1-minute tour" }), " if you are new."),
       h("div", { class: "grid" },
@@ -434,20 +438,26 @@
   function signOut() { api("POST", "/api/auth/logout", {}).catch(function () {}).then(function () { location.hash = "#/"; location.reload(); }); }
 
   // ------------------------------------------------------------------ signed out: sign in, or first visit with the invite code
-  function bare() { document.getElementById("nav").textContent = ""; document.getElementById("who").textContent = ""; }
+  function bare() { document.body.dataset.screen = "onboarding"; document.getElementById("view").className = "page"; document.getElementById("nav").textContent = ""; document.getElementById("who").textContent = ""; }
   var NEVER = "Marjus and Lumi will never ask for your PIN or your vault password.";
   function vSignIn(why) {
-    bare();
-    var id = h("input", { id: "signinId", autocomplete: "username" }), pin = h("input", { type: "password", id: "signinPin", inputmode: "numeric", autocomplete: "current-password" }), out = h("div");
-    show(h("h1", { text: "Sign in to the team box" }), why && !/not signed in/.test(why) ? h("p", { class: "muted", text: why }) : null,
-      h("form", { class: "card", onsubmit: function (ev) {
-        ev.preventDefault(); out.textContent = "";
-        api("POST", "/api/auth/login", { identifier: id.value, pin: pin.value }).then(function () { location.hash = "#/"; boot(); }).catch(function (e) { out.appendChild(err(e)); pin.value = ""; });
-      } }, h("label", { for: "signinId", text: "Your sign-in name (the phone number, email or name you chose)" }), id, h("label", { for: "signinPin", text: "PIN" }), pin,
-        h("div", { class: "row" }, h("button", { type: "submit" }, "Sign in")), out),
-      h("p", {}, "First time here? ", h("a", { href: "#/join", text: "I have an invite code" })),
-      h("p", { class: "muted", text: NEVER + " Forgot your PIN? Ask Marjus for a new invite." }),
-      h("p", {}, h("a", { href: "/how-it-works", text: "How this site works" })));
+    bare(); document.body.dataset.screen = "auth";
+    var icon = function(name){return h("img",{class:"ui-icon",src:"/static/assets/icons/"+name+".svg",alt:""});};
+    var id = h("input",{id:"signinId",autocomplete:"username",placeholder:"Enter your name",required:true}),
+      pin = h("input",{type:"password",id:"signinPin",inputmode:"numeric",autocomplete:"current-password",placeholder:"Enter your PIN",required:true}),
+      out = h("div",{"aria-live":"polite"}),hint=h("p",{class:"preview-hint",hidden:true});
+    var reveal=h("button",{type:"button","aria-label":"Show PIN","aria-pressed":"false",onclick:function(){var shown=pin.type==='text';pin.type=shown?'password':'text';reveal.setAttribute('aria-label',shown?'Show PIN':'Hide PIN');reveal.setAttribute('aria-pressed',shown?'false':'true');reveal.textContent='';reveal.appendChild(icon(shown?'eye-slash':'eye'));}},icon('eye-slash'));
+    var submit=h("button",{class:"auth-submit",type:"submit"},h("span",{text:"Enter workspace"}),icon('arrow-right'));
+    show(h("div",{class:"auth-layout"},
+      h("section",{class:"auth-copy"},h("h1",{text:"Work, together."}),h("p",{text:"Your projects, your team, and Lumi."})),
+      h("section",{class:"auth-form-wrap","aria-label":"Sign in"},h("h2",{text:"Welcome back"}),
+        why&&!/not signed in/.test(why)?h("p",{class:"muted",text:why}):null,
+        h("form",{onsubmit:function(ev){ev.preventDefault();if(submit.disabled)return;out.textContent='';submit.disabled=true;submit.firstChild.textContent='Signing in…';
+          api("POST","/api/auth/login",{identifier:id.value,pin:pin.value}).then(function(){location.hash='#/';boot();}).catch(function(e){out.appendChild(err(e));pin.value='';pin.focus();submit.disabled=false;submit.firstChild.textContent='Enter workspace';});}},
+          h("label",{for:"signinId",text:"Sign-in name"}),id,h("label",{for:"signinPin",text:"PIN"}),h("div",{class:"pin-field"},pin,reveal),submit,out,hint),
+        h("a",{class:"auth-invite",href:"#/join"},h("span",{text:"I have an invite code"}),icon('arrow-right')),
+        h("p",{class:"auth-trust",text:NEVER+" Forgot your PIN? Ask Marjus for a new invite."}))));
+    fetch('/api/ui-preview',{credentials:'same-origin'}).then(function(r){if(!r.ok)throw new Error('not preview');return r.json();}).then(function(p){if(!p.preview)return;document.body.classList.add('is-preview');hint.hidden=false;hint.textContent='Design preview · sample account: '+p.account+' / '+p.pin;}).catch(function(){});
   }
   function vJoin() {
     bare();
@@ -551,6 +561,9 @@
 
   // ------------------------------------------------------------------ router
   function route() {
+    if(TB.disposeView){TB.disposeView();TB.disposeView=null;}
+    document.body.dataset.screen="app";view().className="page";
+    document.querySelectorAll('.nav-more[open]').forEach(function(d){d.open=false;});
     clearTimeout(pollT);
     document.getElementById("nav").classList.remove("open");
     markNav();
@@ -602,14 +615,16 @@
 
   function theme() {
     var t = null; try { t = localStorage.getItem("tb-theme"); } catch (e) {}
-    if (t) document.documentElement.setAttribute("data-theme", t);
+    document.documentElement.setAttribute("data-theme", t || "dark");
   }
   document.addEventListener("DOMContentLoaded", function () {
     theme();
+    document.getElementById("themeBtn").textContent = document.documentElement.getAttribute("data-theme") === "dark" ? "Light" : "Dark";
     document.getElementById("themeBtn").addEventListener("click", function () {
       var cur = document.documentElement.getAttribute("data-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
       var nx = cur === "dark" ? "light" : "dark";
       document.documentElement.setAttribute("data-theme", nx);
+      document.getElementById("themeBtn").textContent = nx === "dark" ? "Light" : "Dark";
       try { localStorage.setItem("tb-theme", nx); } catch (e) {}
     });
     var mb = document.getElementById("menuBtn");
@@ -619,6 +634,8 @@
       var hp = (location.hash || "").slice(2);
       if (hp === "join") vJoin(); else if (hp === "signin") vSignIn();
     });
+    document.addEventListener('keydown',function(ev){if(ev.key!=='Escape')return;document.querySelectorAll('.nav-more[open]').forEach(function(d){d.open=false;d.querySelector('summary').focus();});});
+    document.addEventListener('pointerdown',function(ev){document.querySelectorAll('.nav-more[open]').forEach(function(d){if(!d.contains(ev.target))d.open=false;});});
     boot();
   });
 })();
