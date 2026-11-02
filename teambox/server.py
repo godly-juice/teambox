@@ -113,6 +113,10 @@ class App:
         r("GET", "/api/admin/invites", self.invites_list, admin=True)
         r("POST", "/api/admin/invites", self.invite_create, admin=True)
         r("POST", r"/api/admin/invites/(inv_[0-9a-f]+)/revoke", self.invite_revoke, admin=True)
+        # 2026-11-02 the owner: "a place for people to invite others" - members invite (member role only, a few per week), and "a place for
+        # ppl to apply to join" - the public apply door (apply_url) is linked from the sign-in page and the People page
+        r("GET", "/api/invites", self.my_invites)
+        r("POST", "/api/invites", self.member_invite)
         r("GET", "/api/admin/accounts", self.accounts_list, admin=True)
         r("POST", r"/api/admin/accounts/([^/]{3,120})/(disable|enable|unlock|signout)", self.account_action, admin=True)
         for (meth, path), fn in modules.routes(self).items():
@@ -571,6 +575,35 @@ class App:
         except AuthError as exc:
             raise HttpError(exc.code, exc.msg)
         return 200, {"ok": True, "id": v["id"], "status": v["status"]}
+
+    # ------------------------------------------------------------------ members invite others (2026-11-02)
+    MEMBER_INVITES_PER_WEEK = 3
+
+    def _invites_left(self, email):
+        week = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - 7 * 86400))      # same shape as auth's iso()
+        used = sum(1 for i in self.auth.list_invites() if i.get("by") == email and str(i.get("created") or "") >= week and i.get("status") != "revoked")
+        return max(0, int(self.cfg.get("member_invites_per_week", self.MEMBER_INVITES_PER_WEEK)) - used)
+
+    def my_invites(self, q):
+        mine = [i for i in self.auth.list_invites() if i.get("by") == q.email]
+        return 200, {"invites": mine, "left": self._invites_left(q.email), "per_week": int(self.cfg.get("member_invites_per_week", self.MEMBER_INVITES_PER_WEEK)),
+                     "apply_url": self.cfg.get("apply_url", "https://apply.xseed.ing")}
+
+    def member_invite(self, q):
+        if not q.account:
+            raise HttpError(403, "sign in with your account first")
+        if self._invites_left(q.email) <= 0:
+            raise HttpError(429, "you can invite %d people per week - ask an admin if you need more" % int(self.cfg.get("member_invites_per_week", self.MEMBER_INVITES_PER_WEEK)))
+        b = q.body
+        try:
+            inv, code = self.auth.create_invite(b.get("name"), b.get("purpose"), b.get("phone"), b.get("email"), b.get("language"), role="member", by=q.email)
+        except AuthError as exc:
+            raise HttpError(exc.code, exc.msg)
+        v = self.auth.invite_view(inv)
+        self.log("member invite %s by %s for %r" % (inv["id"], q.email, inv["name"]))
+        return 201, {"ok": True, "id": inv["id"], "code": code, "link": self.cfg["public_url"].rstrip("/") + "/join", "expires": v["expires"],
+                     "name": inv["name"], "purpose": inv["purpose"], "account": inv["account"], "left": self._invites_left(q.email),
+                     "note": "the code is shown only now - it works once; give it to the person yourself"}
 
     def accounts_list(self, q):
         now = time.time()
