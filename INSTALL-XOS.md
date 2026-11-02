@@ -1,6 +1,6 @@
 # Installing the team box on xOS (the RTX 3060 PC)
 
-The app is plain Python 3 (standard library only) plus `git`, `bubblewrap` and `prlimit`. It never holds Marjus's files or secrets.
+The app is plain Python 3 (standard library only) plus `git`, `bubblewrap` and `prlimit`. It never holds the owner's files or secrets.
 The one secret it needs is the **team gateway secret** from BESNIK. That secret is read from a file and never goes into the repo.
 
 > Not done yet (Director): nothing below has been run on the real box. Every step was tested in the `archlinux` WSL distro on BESNIK
@@ -55,14 +55,14 @@ Copy the gateway secret over **by hand**, e.g. on a USB stick or by typing it. I
 sudo install -o root -g teambox -m 0640 /dev/stdin /etc/teambox/gateway.secret    # paste, then Ctrl-D
 ```
 
-## 3b. The admin account (Marjus) and Lumi's invite token
+## 3b. The admin account (the owner) and Lumi's invite token
 
 Run these on the box as the `teambox` user (they write into the data dir). Both print nothing secret except the admin's one-time code:
 ```sh
-# Marjus's admin account: prints a one-time 12-digit code (48 h, works once). He opens https://team.xseed.ing/join, types it,
+# the owner's admin account: prints a one-time 12-digit code (48 h, works once). He opens https://team.xseed.ing/join, types it,
 # chooses his sign-in name + PIN + vault password. Run it again any time to make another admin invite.
-cd /opt/teambox && sudo -u teambox python3 -m teambox.auth --config /etc/teambox/config.json admin-invite --name Marjus
-#   on xOS (Alpine + runit, no sudo):  cd /opt/teambox && chpst -u teambox python3 -m teambox.auth --config /etc/teambox/config.json admin-invite --name Marjus
+cd /opt/teambox && sudo -u teambox python3 -m teambox.auth --config /etc/teambox/config.json admin-invite --name the owner
+#   on xOS (Alpine + runit, no sudo):  cd /opt/teambox && chpst -u teambox python3 -m teambox.auth --config /etc/teambox/config.json admin-invite --name the owner
 
 # Lumi's admin API token for the invite API (POST/GET /api/admin/invites, revoke). Written to the file (0600), never printed:
 cd /opt/teambox && sudo -u teambox python3 -m teambox.auth --config /etc/teambox/config.json new-api-token --out /tmp/invite-api.token   # xOS: chpst -u teambox
@@ -73,13 +73,13 @@ The API token reaches ONLY the invite endpoints. The box keeps its sha256. Membe
 "Admin: invites & accounts" page); an invite made through the API is always a member invite - admin invites only come from the CLI.
 Keep `/var/lib/teambox/auth/pepper` with the data backup: without it no PIN and no invite code can be checked.
 
-## 4. BESNIK side (team gateway). Only Marjus or the Director does this, in Lumi Control / team-gateway.json:
+## 4. BESNIK side (team gateway). Only the owner or the Director does this, in Lumi Control / team-gateway.json:
 - In `D:\Atlas\memory\team-gateway.json`, set `"use_lan": true`, set `"lan_bind": "<BESNIK LAN IP>"`, and add the team box's LAN IP to `allow_ips`. Then restart the gateway the usual way (explorer.exe).
 - In Lumi Control -> Router settings, add each team member's **account id** as an account, with their caps and allowed models. The team
   box sends `X-Team-Account = <account id>`; account ids look like `ana@team.xseed.ing` (made from the invite's name; the invite API's
   answer and the Admin page show it).
 - Share the models that the team may use.
-- Admins come through the gateway too, but the gateway refuses the owner's own account by design (`admin_not_via_gateway`). To chat or build on the team box, Marjus needs a separate team account, or he uses BESNIK's own admin portal.
+- Admins come through the gateway too, but the gateway refuses the owner's own account by design (`admin_not_via_gateway`). To chat or build on the team box, the owner needs a separate team account, or he uses BESNIK's own admin portal.
 - Firewall: BESNIK should accept 11540 only from the team box's IP.
 
 ## 5. Cloudflare: the team box's own tunnel + Access
@@ -91,7 +91,7 @@ sudo cp /opt/teambox/systemd/teambox.yml.example /etc/cloudflared/teambox.yml   
 ```
 - **DNS:** `team.xseed.ing` currently points at **BESNIK's** tunnel (TEAM-PORTAL-REPORT). Move it only when the box is ready:
   `cloudflared tunnel route dns --overwrite-dns teambox team.xseed.ing`. Then remove the `team.xseed.ing` ingress lines from BESNIK's
-  `tunnel-config.yml` and restart BESNIK's cloudflared the safe way (Director, with Marjus's OK).
+  `tunnel-config.yml` and restart BESNIK's cloudflared the safe way (Director, with the owner's OK).
 - **Cloudflare Access is OFF by default** (`access.enabled: false`): the app's own invite-code + PIN login is the sign-in. If no Access
   application covers `team.xseed.ing`, nothing else is needed. If one exists from before, remove it (or set it to Bypass), otherwise
   members get an email login they can not pass.
