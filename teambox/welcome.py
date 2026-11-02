@@ -1,9 +1,9 @@
-"""LUMI'S WELCOME (Marjus, 2026-10-21: "person starts talking to lumi ... she lets them know where they can do what by introducing
+"""LUMI'S WELCOME (the owner, 2026-10-21: "person starts talking to lumi ... she lets them know where they can do what by introducing
 herself based on what i said they're there to do. and that starts their first project").
 
 After setup (invite code -> PIN -> vault password -> optional profile) the member lands in a chat with Lumi. That chat goes to the
 team's SHARED model through BESNIK's team gateway (under the member's own account and caps), with the system prompt from
-config/templates/lumi-welcome.txt filled in with the PURPOSE Marjus gave in the invite and the site's areas with their links.
+config/templates/lumi-welcome.txt filled in with the PURPOSE the owner gave in the invite and the site's areas with their links.
 Their FIRST PROJECT (a private sandbox named from the purpose) is created when the account is made. If no model answers, the member
 gets the plain fallback text (config/templates/lumi-welcome-fallback.txt) instead, which says why."""
 import os
