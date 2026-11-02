@@ -1,7 +1,7 @@
-"""SIGN-IN without Cloudflare Access (Marjus, 2026-10-21: "lumi creates them an account ... a code to put in to verify its them. they put
+"""SIGN-IN without Cloudflare Access (the owner, 2026-10-21: "lumi creates them an account ... a code to put in to verify its them. they put
 in the code and lumi asks them to enter a new code which will be their pin, also a password for their vault").
 
-Accounts exist ONLY because an admin (Marjus, or Lumi through the admin invite API) invited someone. There is no self sign-up.
+Accounts exist ONLY because an admin (the owner, or Lumi through the admin invite API) invited someone. There is no self sign-up.
   1. INVITE  (admin):  name, phone?, email?, purpose, language?  -> a one-time code "TTTT SSSS SSSS" (12 digits), shown once.
      The first 4 digits are the invite's tag (so wrong tries count against THAT invite), the other 8 are secret. Stored: the tag and
      scrypt(HMAC(pepper, code)) only. Expires after auth.invite_hours (48 h). Works once. invite_max_tries wrong codes -> locked.
@@ -18,8 +18,8 @@ local cloudflared, else the peer. IP counters live in memory (a restart clears t
 
 ADMIN API TOKENS (for Lumi on BESNIK): "tbxadm_..." bearer tokens, stored as sha256 only. Made at install time with the CLI:
     python3 -m teambox.auth new-api-token --config /etc/teambox/config.json --out /etc/teambox/invite-api.token
-THE FIRST ADMIN (Marjus) is invited from the CLI the same way everyone else is, with role admin:
-    python3 -m teambox.auth admin-invite --config /etc/teambox/config.json --name Marjus
+THE FIRST ADMIN (the owner) is invited from the CLI the same way everyone else is, with role admin:
+    python3 -m teambox.auth admin-invite --config /etc/teambox/config.json --name the owner
 Layout under data_dir/auth/ (directory 0700):
   pepper          32 random bytes (hex) - HMAC key for every PIN/code hash. Back it up with the data dir; without it no PIN works.
   accounts.json   {account id: {id, name, role, status, identifiers, pin{salt,hash,n}, fails, locked_until, lock_level, ...}}
@@ -298,7 +298,7 @@ class Auth:
         """The person types the code. -> (invite view, setup ticket). The code is used up on success."""
         self.ip_check(ip)
         bad = AuthError(400, "that code is not right, or it has expired or was already used. Codes have 12 digits, work once and "
-                             "expire after %s hours - ask Marjus (or Lumi) for a new one if needed." % self.c["invite_hours"])
+                             "expire after %s hours - ask the owner (or Lumi) for a new one if needed." % self.c["invite_hours"])
         if self.join_paused():
             raise AuthError(429, "joining is paused for a while because of many wrong codes - try again in an hour")
         d = digits(code)
@@ -348,7 +348,7 @@ class Auth:
         with LOCK:
             inv = self.setup_invite(ticket)
             if not inv:
-                raise AuthError(401, "your setup step has expired - ask Marjus (or Lumi) for a new invite code")
+                raise AuthError(401, "your setup step has expired - ask the owner (or Lumi) for a new invite code")
             ident = check_identifier(identifier)
             pin = check_pin(pin, c)
             accs = self.accounts()
@@ -399,7 +399,7 @@ class Auth:
                     self.save_accounts(accs)
                 raise bad
             if a.get("status") != "active":
-                raise AuthError(403, "this account is switched off - ask Marjus")
+                raise AuthError(403, "this account is switched off - ask the owner")
             a["fails"], a["lock_level"], a["last_login"] = 0, 0, iso(now)
             self.save_accounts(accs)
         self.log("auth: %s signed in from %s" % (a["id"], ip))
@@ -566,7 +566,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(prog="python3 -m teambox.auth")
     ap.add_argument("--config")
     sub = ap.add_subparsers(dest="cmd", required=True)
-    a1 = sub.add_parser("admin-invite", help="invite an ADMIN (Marjus) - prints the one-time code ONCE")
+    a1 = sub.add_parser("admin-invite", help="invite an ADMIN (the owner) - prints the one-time code ONCE")
     a1.add_argument("--name", required=True)
     a1.add_argument("--purpose", default="run the team box (admin)")
     a1.add_argument("--email")
